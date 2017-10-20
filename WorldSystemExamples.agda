@@ -199,7 +199,7 @@ module actByReplacement (W' : Set)(pt : W')
   isActionR (topTo x) (topTo top) {top} refl qrw = qrw
   isActionR (topTo x) (topTo (the y)) {top} refl ()
 
-  GwqConn : forall q (w : W) {u qu'} su=w qu {v qv'} sv=w qv
+  GwqConn : forall (q : Q Real) (w : W) {u qu'} su=w qu {v qv'} sv=w qv
          -> Star {Sg W (\u -> top == w * Sg W \qu -> q # u ~ qu)}
                  (\{(u , _ , qu' , _) (v , _ , qv' , _) -> (u << v) + (qv' << qu')})
                  (u , su=w , qu' , qu) (v , sv=w , qv' , qv)
@@ -1317,23 +1317,13 @@ module corec where
   lem+ (o' y<z) x+y<y = os (lem+ y<z x+y<y)
   lem+ (os y<z) (os x+y<y) = os (lem+ y<z x+y<y)
   lem+ (os y<z) (o' x+y<y) = os (lem+ y<z (x+y<y -<- o' oi))
-{-
-  lem+ x ze ze y<z x+y<y = x+y<y
-  lem+ x ze (su x₁) y<z x+y<y = lem+ x ze x₁ <> x+y<y
-  lem+ ze (su x) ze y<z x+y<y = <>
-  lem+ (su x) (su x₁) ze y<z x+y<y = y<z
-  lem+ x (su x₁) (su x₂) y<z x+y<y = lem+ x x₁ x₂ y<z x+y<y
--}
+
   lem+2 : forall a b c d -> a +N c <= b +N c -> a +N d <= b +N d
   lem+2 a b ze ze ac<bc = ac<bc
   lem+2 a b ze (su d) ac<bc = os (lem+2 a b ze d ac<bc)
   lem+2 a b (su c) d (os ac<bc) = lem+2 a b c d ac<bc
   lem+2 a b (su c) d (o' ac<bc) = lem+2 a b c d (ac<bc -<- o' oi)
-{-
-  lem+2 a b ze ze p = p
-  lem+2 a b ze (su x) p = lem+2 a b ze x p
-  lem+2 a b (su x) d p = lem+2 a b x d p
--}
+
   lem+3 : forall {b c} -> b <= c -> forall a -> a +N b <= a +N c
   lem+3 oz a = oi
   lem+3 (os b<c) a = os (lem+3 b<c a)
