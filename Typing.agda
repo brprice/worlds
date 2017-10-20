@@ -168,6 +168,15 @@ thinSYN th thC (T :~: t) = thinCHK th thC T :~: thinCHK th thC t
 ------------------------------------------------------------------------------
 ----- Strengthenings preserve judgements -------------------------------------
 ------------------------------------------------------------------------------
+{-
+This section is only necessary due to the way we formulate a substitution by
+splitting in into a context morphism and a proof that it actually is a
+substitution.
+
+If we formulated a substitution directly, we could avoid all mention of
+strengthening.
+-}
+
 -- first, synthesising a type for a thinned term in a thinned context
 -- will always give a thinned types
 SYNpresThin : {n m : Nat}(th : n <= m)(Ga : Cx n)(De : Cx m)
@@ -341,6 +350,9 @@ lowerCxSYN De<Ga (*S :~: Ss) = lowerCxCHK De<Ga *S :~: lowerCxCHK De<Ga Ss
 ------------------------------------------------------------------------------
 ----- Subsumption ------------------------------------------------------------
 ------------------------------------------------------------------------------
+-- We recall here the note in WorldSystem.agda about the difference between
+-- the paper and the code regarding the formulation of quantifiers
+
 -- CxHole must be backwards style --- i.e. keep "local" end accessible
 -- since when we go under a binder, we extend the CxHole!
 

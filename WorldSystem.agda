@@ -23,6 +23,13 @@ a ~ b = a == Just b
 infix 10 _~_
 
 data Sort : Set where Real Fake : Sort
+-- For historical reasons we formulate quantifiers differently to the paper.
+-- our Q Real is the paper's Q_J, and the paper's Q_C is Sg Sort Q, noting that
+-- Q_J is a subset of Q_C.
+--
+-- This does mean we cannot restrict the quantifiers in terms as much as one can
+-- in the paper, but this is irrelevant for the meta-theory.
+--
 -- Fake is things of the form q & unstar & r
 -- Real is things where any unstar is "guarded" on the left by a star: star & q & unstar & r
 -- Only Real ones are allowed to appear in terms, the Fake ones are to prove subsumption
