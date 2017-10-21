@@ -1,5 +1,10 @@
 module WorldSystemExamples where
 
+-- We note that this code could be shorter if we tried to be clever
+-- however, most of this can be automatically generated using Auto,
+-- given a few hints
+
+
 open import Basics hiding (the)
 open import Star
 open import WorldSystem
