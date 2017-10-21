@@ -1558,3 +1558,713 @@ module corec where
             ; stq = stq
             ; GwqConn = GwqConn
             }
+
+
+-- For any magma of endos of the compute nodes,
+-- we have a world system with those + id and star as quantifiers
+-- (and then tyToTy and undef are in QJ)
+module distrib (Ns : Set) -- set of compute nodes
+               (Es : Set) -- set of endomorphisms of Ns
+               (_$_ : Es -> Ns -> Ns)
+               (_-_ : Es -> Es -> Es) -- which are a magma
+               (act : forall e f n -> ((e - f) $ n) == (e $ (f $ n)))
+                 -- and they compose nicely
+               where
+
+  data W : Set where
+    ty lib : W
+    N : Ns -> W
+
+  data Q : Sort -> Set where
+    id st NsToTy : Q Real
+    E : Es -> Q Real
+    tyToTy undef : Q Real
+
+    tyToLib constLib NsToLib : Q Fake
+
+  _<<_ : W -> W -> Set
+  u << ty = One
+  lib << lib = One
+  _ << lib = Zero
+  ty << N y = Zero
+  lib << N y = One
+  N x << N y = x == y
+
+  _#_ : forall {s} -> Q s -> W -> Maybe W
+  id # w = Just w
+  st # w = Just ty
+  NsToTy # ty = Just ty
+  NsToTy # lib = Nothing
+  NsToTy # N x = Just ty
+  E f # ty = Just ty
+  E f # lib = Nothing
+  E f # N x = Just (N (f $ x))
+  tyToLib # ty = Just lib
+  tyToLib # _ = Nothing
+  tyToTy # ty = Just ty
+  tyToTy # _ = Nothing
+  undef # _ = Nothing
+  constLib # _ = Just lib
+  NsToLib # ty = Just lib
+  NsToLib # N x = Just lib
+  NsToLib # lib = Nothing
+  infixr 40 _#_
+
+  _&_ : Q Real -> Q Real -> Q Real
+  q & undef = undef
+  q & id = q
+  undef & q = undef
+  q & st = st
+  q & NsToTy = NsToTy
+  id & E g = E g
+  st & E g = NsToTy
+  NsToTy & E g = NsToTy
+  E f & E g = E (f - g)
+  tyToTy & E g = tyToTy
+  q & tyToTy = tyToTy
+
+  star& : Q Fake -> Q Real
+  star& tyToLib = tyToTy
+  star& constLib = st
+  star& NsToLib = NsToTy
+
+  unst : W -> Maybe W
+  unst ty = Just lib
+  unst _ = Nothing
+
+  _&unst : Q Real -> Sg Sort Q
+  id &unst = _ , tyToLib
+  st &unst = _ , tyToTy
+  NsToTy &unst = _ , undef
+  E x &unst = _ , undef
+  tyToTy &unst = _ , undef
+  undef &unst = _ , undef
+
+  _&unst&_ : Q Real -> One + Q Real -> Sg Sort Q
+  q &unst& inl <> = q &unst
+  q &unst& inr id = q &unst
+  id &unst& inr st = _ , constLib
+  st &unst& inr st = _ , st
+  NsToTy &unst& inr st = _ , undef
+  E f &unst& inr st = _ , undef
+  tyToTy &unst& inr st = _ , undef
+  undef &unst& inr st = _ , undef
+  id &unst& inr NsToTy = _ , NsToLib
+  st &unst& inr NsToTy = _ , NsToTy
+  NsToTy &unst& inr NsToTy = _ , undef
+  E x &unst& inr NsToTy = _ , undef
+  tyToTy &unst& inr NsToTy = _ , undef
+  undef &unst& inr NsToTy = _ , undef
+  id &unst& inr (E g) = _ , tyToLib
+  st &unst& inr (E g) = _ , tyToTy
+  NsToTy &unst& inr (E g) = _ , undef
+  E f &unst& inr (E g) = _ , undef
+  tyToTy &unst& inr (E g) = _ , undef
+  undef &unst& inr (E g) = _ , undef
+  id &unst& inr tyToTy = _ , tyToLib
+  st &unst& inr tyToTy = _ , tyToTy
+  NsToTy &unst& inr tyToTy = _ , undef
+  E x &unst& inr tyToTy = _ , undef
+  tyToTy &unst& inr tyToTy = _ , undef
+  undef &unst& inr tyToTy = _ , undef
+  q &unst& inr undef = _ , undef
+
+  <<refl : forall {w} -> w << w
+  <<refl {ty} = <>
+  <<refl {lib} = <>
+  <<refl {N x} = refl
+
+  <<trans : forall {u v w} -> u << v -> v << w -> u << w
+  <<trans {u} {v} {ty} u<v v<w = <>
+  <<trans {u} {ty} {lib} u<v ()
+  <<trans {u} {lib} {lib} u<v <> = u<v
+  <<trans {u} {N y} {lib} u<v ()
+  <<trans {u} {ty} {N z} u<v ()
+  <<trans {ty} {lib} {N z} () <>
+  <<trans {lib} {lib} {N z} <> <> = <>
+  <<trans {N x} {lib} {N z} () <>
+  <<trans {u} {N .z} {N z} u<v refl = u<v
+
+  st-unst : forall {w usw} -> unst w ~ usw -> ty == w
+  st-unst {ty} refl = refl
+  st-unst {lib} ()
+  st-unst {N x} ()
+
+  def-upset : forall {s}(q : Q s){v qv w} -> q # v ~ qv -> v << w -> Sg W (\qw -> q # w ~ qw)
+  def-upset id qv v<w = _ , refl
+  def-upset st qv v<w = ty , refl
+  def-upset NsToTy {v} {w = ty} qv v<w = ty , refl
+  def-upset NsToTy {ty} {w = lib} qv ()
+  def-upset NsToTy {lib} {w = lib} () <>
+  def-upset NsToTy {N x} {w = lib} qv ()
+  def-upset NsToTy {v} {w = N y} qv v<w = ty , refl
+  def-upset (E f) {w = ty} qv v<w = ty , refl
+  def-upset (E f) {ty} {w = lib} qv ()
+  def-upset (E f) {lib} {w = lib} () <>
+  def-upset (E f) {N x} {w = lib} qv ()
+  def-upset (E f) {w = N y} qv v<w = N (f $ y) , refl
+  def-upset tyToTy {ty} {w = ty} qv <> = ty , refl
+  def-upset tyToTy {ty} {w = lib} qv ()
+  def-upset tyToTy {ty} {w = N x} qv ()
+  def-upset tyToTy {lib} () v<w
+  def-upset tyToTy {N x} () v<w
+  def-upset undef () v<w
+  def-upset tyToLib {ty} {w = ty} refl <> = lib , refl
+  def-upset tyToLib {ty} {w = lib} refl ()
+  def-upset tyToLib {ty} {w = N x} refl ()
+  def-upset tyToLib {lib} () v<w
+  def-upset tyToLib {N x} () v<w
+  def-upset constLib qv v<w = lib , refl
+  def-upset NsToLib {ty} {w = ty} refl v<w = lib , refl
+  def-upset NsToLib {ty} {w = lib} refl ()
+  def-upset NsToLib {ty} {w = N x} refl ()
+  def-upset NsToLib {lib} {w = w} () v<w
+  def-upset NsToLib {N x} {w = ty} refl <> = lib , refl
+  def-upset NsToLib {N x} {w = lib} refl ()
+  def-upset NsToLib {N x} {w = N .x} refl refl = lib , refl
+
+  op : forall {s}(q : Q s){v qv' w} -> (qv : q # v ~ qv') -> (v<w : v << w) -> qv' << fst (def-upset q {w = w} qv v<w)
+  op id refl v<w = v<w
+  op st qv v<w = <>
+  op NsToTy {w = ty} qv v<w = <>
+  op NsToTy {ty} {w = lib} qv ()
+  op NsToTy {lib} {w = lib} () <>
+  op NsToTy {N x} {w = lib} qv ()
+  op NsToTy {w = N x} qv v<w = <>
+  op (E f) {w = ty} qv v<w = <>
+  op (E f) {ty} {w = lib} qv ()
+  op (E f) {lib} {w = lib} () <>
+  op (E f) {N x} {w = lib} qv ()
+  op (E f) {ty} {w = N y} qv ()
+  op (E f) {lib} {w = N y} () v<w
+  op (E f) {N x} {w = N .x} refl refl = refl
+  op tyToTy {ty} {w = ty} qv <> = <>
+  op tyToTy {ty} {w = lib} qv ()
+  op tyToTy {ty} {w = N x} qv ()
+  op tyToTy {lib} () v<w
+  op tyToTy {N x} () v<w
+  op undef () v<w
+  op tyToLib {ty} {w = ty} refl <> = <>
+  op tyToLib {ty} {w = lib} refl ()
+  op tyToLib {ty} {w = N x} refl ()
+  op tyToLib {lib} () v<w
+  op tyToLib {N x} () v<w
+  op constLib refl v<w = <>
+  op NsToLib {ty} {w = ty} refl <> = <>
+  op NsToLib {ty} {w = lib} refl ()
+  op NsToLib {ty} {w = N x} refl ()
+  op NsToLib {lib} () v<w
+  op NsToLib {N x} {w = ty} refl <> = <>
+  op NsToLib {N x} {w = lib} refl ()
+  op NsToLib {N x} {w = N .x} refl refl = <>
+
+  _#?_ : forall {s} -> One + Q s -> W -> Maybe W
+  _#?_ {s} = either (\_ -> Just) _#_
+  infix 40 _#?_
+
+  def-upset? : forall {s}(q : One + Q s){v qv w} -> q #? v ~ qv -> v << w -> Sg W (q #? w ~_)
+  def-upset? {s} = either {C = \q -> forall {v qv w} -> q #? v ~ qv -> v << w -> Sg W (q #? w ~_)}
+                          (\_ {_}{_}{w} _ _ -> w , refl) def-upset
+
+  deflateUpset : forall {s}(q : Q s){v qv' w}
+               -> (qv : q # v ~ qv')
+               -> qv' << v -> (v<w : v << w)
+               -> fst (def-upset q {w = w} qv v<w) << w
+  deflateUpset id {w = ty} qv qv<v v<w = <>
+  deflateUpset id {w = lib} qv qv<v v<w = <>
+  deflateUpset id {w = N x} qv qv<v v<w = refl
+  deflateUpset st {ty} {w = ty} refl <> <> = <>
+  deflateUpset st {ty} {w = lib} refl <> ()
+  deflateUpset st {ty} {w = N x} refl <> ()
+  deflateUpset st {lib} refl () v<w
+  deflateUpset st {N x} refl () v<w
+  deflateUpset NsToTy {v} {w = ty} qv qv<v v<w = <>
+  deflateUpset NsToTy {ty} {w = lib} qv qv<v ()
+  deflateUpset NsToTy {lib} {w = lib} () qv<v <>
+  deflateUpset NsToTy {N x} {w = lib} qv qv<v ()
+  deflateUpset NsToTy {ty} {w = N x} qv qv<v ()
+  deflateUpset NsToTy {lib} {w = N x} () qv<v v<w
+  deflateUpset NsToTy {N y} {w = N x} refl () v<w
+  deflateUpset (E f) {w = ty} qv qv<v v<w = <>
+  deflateUpset (E f) {ty} {w = lib} qv qv<v ()
+  deflateUpset (E f) {lib} {w = lib} () qv<v <>
+  deflateUpset (E f) {N x} {w = lib} qv qv<v ()
+  deflateUpset (E f) {ty} {w = N x} qv qv<v ()
+  deflateUpset (E f) {lib} {w = N x} () qv<v <>
+  deflateUpset (E f) {N x} {w = N .x} refl qv<v refl = qv<v
+  deflateUpset tyToTy {ty} {w = ty} qv qv<v <> = <>
+  deflateUpset tyToTy {ty} {w = lib} qv qv<v ()
+  deflateUpset tyToTy {ty} {w = N x} qv qv<v ()
+  deflateUpset tyToTy {lib} () qv<v v<w
+  deflateUpset tyToTy {N x} () qv<v v<w
+  deflateUpset undef () qv<v v<w
+  deflateUpset tyToLib {ty} {w = ty} refl qv<v <> = <>
+  deflateUpset tyToLib {ty} {w = lib} refl qv<v ()
+  deflateUpset tyToLib {ty} {w = N x} refl qv<v ()
+  deflateUpset tyToLib {lib} () qv<v v<w
+  deflateUpset tyToLib {N x} () qv<v v<w
+  deflateUpset constLib {v} {w = w} refl qv<v v<w = <<trans {lib}{v}{w} qv<v v<w
+  deflateUpset NsToLib {ty} {w = ty} refl qv<v <> = <>
+  deflateUpset NsToLib {ty} {w = lib} refl qv<v ()
+  deflateUpset NsToLib {ty} {w = N x} refl qv<v ()
+  deflateUpset NsToLib {lib} {w = w} () qv<v v<w
+  deflateUpset NsToLib {N x} {w = ty} refl qv<v <> = <>
+  deflateUpset NsToLib {N x} {w = lib} refl qv<v ()
+  deflateUpset NsToLib {N x} {w = N .x} refl qv<v refl = <>
+
+  dominateUpset : forall {s}(q : Q s)(r : One + Q Real){v qv' rv' w}
+               -> (qv : q # v ~ qv')(rv : r #? v ~ rv')
+               -> qv' << rv' -> (v<w : v << w)
+               -> fst (def-upset q {w = w} qv v<w) << fst (def-upset? r {w = w} rv v<w)
+  dominateUpset q (inl <>) {w = w} qv refl qv<rv v<w = deflateUpset q {w = w} qv qv<rv v<w
+  dominateUpset id (inr id) {w = w} qv rv qv<rv v<w = <<refl {w}
+  dominateUpset id (inr st) qv rv qv<rv v<w = <>
+  dominateUpset id (inr NsToTy) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset id (inr NsToTy) {ty} {w = lib} qv rv qv<rv ()
+  dominateUpset id (inr NsToTy) {lib} {w = lib} qv () qv<rv <>
+  dominateUpset id (inr NsToTy) {N x} {w = lib} qv rv qv<rv ()
+  dominateUpset id (inr NsToTy) {v} {w = N x} qv rv qv<rv v<w = <>
+  dominateUpset id (inr (E x)) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset id (inr (E x)) {ty} {w = lib} qv rv qv<rv ()
+  dominateUpset id (inr (E x)) {lib} {w = lib} qv () qv<rv <>
+  dominateUpset id (inr (E x)) {N x₁} {w = lib} qv rv qv<rv ()
+  dominateUpset id (inr (E x)) {ty} {w = N x₁} refl refl qv<rv ()
+  dominateUpset id (inr (E x)) {lib} {w = N x₁} refl () qv<rv v<w
+  dominateUpset id (inr (E x)) {N x₂} {w = N .x₂} refl refl qv<rv refl = qv<rv
+  dominateUpset id (inr tyToTy) {ty} {w = ty} qv refl qv<rv <> = <>
+  dominateUpset id (inr tyToTy) {ty} {w = lib} qv refl qv<rv ()
+  dominateUpset id (inr tyToTy) {ty} {w = N x} qv refl qv<rv ()
+  dominateUpset id (inr tyToTy) {lib} qv () qv<rv v<w
+  dominateUpset id (inr tyToTy) {N x} qv () qv<rv v<w
+  dominateUpset id (inr undef) qv () qv<rv v<w
+  dominateUpset st (inr id) {v} {w = w} refl refl qv<rv v<w = <<trans {ty}{v}{w} qv<rv v<w
+  dominateUpset st (inr st) qv rv qv<rv v<w = <>
+  dominateUpset st (inr NsToTy) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset st (inr NsToTy) {ty} {w = lib} qv rv qv<rv ()
+  dominateUpset st (inr NsToTy) {lib} {w = lib} qv () qv<rv <>
+  dominateUpset st (inr NsToTy) {N x} {w = lib} qv rv qv<rv ()
+  dominateUpset st (inr NsToTy) {w = N x} qv rv qv<rv v<w = <>
+  dominateUpset st (inr (E x)) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset st (inr (E x)) {ty} {w = lib} qv rv qv<rv ()
+  dominateUpset st (inr (E x)) {lib} {w = lib} qv () qv<rv <>
+  dominateUpset st (inr (E x)) {N x₁} {w = lib} qv rv qv<rv ()
+  dominateUpset st (inr (E x)) {ty} {w = N x₁} qv rv qv<rv ()
+  dominateUpset st (inr (E x)) {lib} {w = N x₁} refl () qv<rv <>
+  dominateUpset st (inr (E x)) {N x₁} {w = N .x₁} refl refl () refl
+  dominateUpset st (inr tyToTy) {ty} {w = ty} qv refl qv<rv <> = <>
+  dominateUpset st (inr tyToTy) {ty} {w = lib} qv refl qv<rv ()
+  dominateUpset st (inr tyToTy) {ty} {w = N x} qv refl qv<rv ()
+  dominateUpset st (inr tyToTy) {lib} qv () qv<rv v<w
+  dominateUpset st (inr tyToTy) {N x} qv () qv<rv v<w
+  dominateUpset st (inr undef) qv () qv<rv v<w
+  dominateUpset NsToTy (inr id) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset NsToTy (inr id) {ty} {w = lib} refl rv qv<rv ()
+  dominateUpset NsToTy (inr id) {lib} {w = lib} () rv qv<rv v<w
+  dominateUpset NsToTy (inr id) {N x} {w = lib} refl rv qv<rv ()
+  dominateUpset NsToTy (inr id) {ty} {w = N x} qv refl qv<rv ()
+  dominateUpset NsToTy (inr id) {lib} {w = N x} () refl qv<rv <>
+  dominateUpset NsToTy (inr id) {N x} {w = N .x} refl refl () refl
+  dominateUpset NsToTy (inr st) qv rv qv<rv v<w = <>
+  dominateUpset NsToTy (inr NsToTy) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset NsToTy (inr NsToTy) {ty} {w = lib} refl refl qv<rv ()
+  dominateUpset NsToTy (inr NsToTy) {lib} {w = lib} () rv qv<rv v<w
+  dominateUpset NsToTy (inr NsToTy) {N x} {w = lib} refl refl qv<rv ()
+  dominateUpset NsToTy (inr NsToTy) {w = N x} qv rv qv<rv v<w = <>
+  dominateUpset NsToTy (inr (E x)) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset NsToTy (inr (E x)) {ty} {w = lib} refl refl qv<rv ()
+  dominateUpset NsToTy (inr (E x)) {lib} {w = lib} () rv qv<rv v<w
+  dominateUpset NsToTy (inr (E x)) {N x₁} {w = lib} refl refl qv<rv ()
+  dominateUpset NsToTy (inr (E x)) {ty} {w = N x₁} refl refl qv<rv ()
+  dominateUpset NsToTy (inr (E x)) {lib} {w = N x₁} () rv qv<rv v<w
+  dominateUpset NsToTy (inr (E x)) {N x₁} {w = N .x₁} refl refl () refl
+  dominateUpset NsToTy (inr tyToTy) {ty} {w = ty} qv refl qv<rv <> = <>
+  dominateUpset NsToTy (inr tyToTy) {ty} {w = lib} qv refl qv<rv ()
+  dominateUpset NsToTy (inr tyToTy) {ty} {w = N x} qv refl qv<rv ()
+  dominateUpset NsToTy (inr tyToTy) {lib} qv () qv<rv v<w
+  dominateUpset NsToTy (inr tyToTy) {N x} qv () qv<rv v<w
+  dominateUpset NsToTy (inr undef) qv () qv<rv v<w
+  dominateUpset (E x) (inr id) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset (E x) (inr id) {ty} {w = lib} qv rv qv<rv ()
+  dominateUpset (E x) (inr id) {lib} {w = lib} () rv qv<rv <>
+  dominateUpset (E x) (inr id) {N x₁} {w = lib} qv rv qv<rv ()
+  dominateUpset (E x) (inr id) {ty} {w = N x₁} qv rv qv<rv ()
+  dominateUpset (E x) (inr id) {lib} {w = N x₁} () rv qv<rv <>
+  dominateUpset (E x) (inr id) {N x₁} {w = N .x₁} refl refl qv<rv refl = qv<rv
+  dominateUpset (E x) (inr st) qv rv qv<rv v<w = <>
+  dominateUpset (E x) (inr NsToTy) {v} {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset (E x) (inr NsToTy) {ty} {w = lib} refl rv qv<rv ()
+  dominateUpset (E x) (inr NsToTy) {lib} {w = lib} () rv qv<rv v<w
+  dominateUpset (E x) (inr NsToTy) {N x₁} {w = lib} refl rv qv<rv ()
+  dominateUpset (E x) (inr NsToTy) {v} {w = N x₁} qv rv qv<rv v<w = <>
+  dominateUpset (E x) (inr (E x₁)) {v} {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset (E x) (inr (E x₁)) {ty} {w = lib} refl refl qv<rv ()
+  dominateUpset (E x) (inr (E x₁)) {lib} {w = lib} () rv qv<rv v<w
+  dominateUpset (E x) (inr (E x₁)) {N x₂} {w = lib} refl refl qv<rv ()
+  dominateUpset (E x) (inr (E x₁)) {ty} {w = N x₂} qv rv qv<rv ()
+  dominateUpset (E x) (inr (E x₁)) {lib} {w = N x₂} () rv qv<rv <>
+  dominateUpset (E x) (inr (E x₁)) {N x₃} {w = N .x₃} refl refl qv<rv refl = qv<rv
+  dominateUpset (E x) (inr tyToTy) {ty} {w = ty} qv refl qv<rv <> = <>
+  dominateUpset (E x) (inr tyToTy) {ty} {w = lib} qv refl qv<rv ()
+  dominateUpset (E x) (inr tyToTy) {ty} {w = N x₁} qv refl qv<rv ()
+  dominateUpset (E x) (inr tyToTy) {lib} {w = w} qv () qv<rv v<w
+  dominateUpset (E x) (inr tyToTy) {N x₁} {w = w} qv () qv<rv v<w
+  dominateUpset (E x) (inr undef) qv () qv<rv v<w
+  dominateUpset tyToTy (inr id) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToTy (inr id) {ty} {w = lib} refl rv qv<rv ()
+  dominateUpset tyToTy (inr id) {ty} {w = N x} refl rv qv<rv ()
+  dominateUpset tyToTy (inr id) {lib} () rv qv<rv v<w
+  dominateUpset tyToTy (inr id) {N x} () rv qv<rv v<w
+  dominateUpset tyToTy (inr st) qv rv qv<rv v<w = <>
+  dominateUpset tyToTy (inr NsToTy) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToTy (inr NsToTy) {ty} {w = lib} refl rv qv<rv ()
+  dominateUpset tyToTy (inr NsToTy) {ty} {w = N x} refl rv qv<rv ()
+  dominateUpset tyToTy (inr NsToTy) {lib} () rv qv<rv v<w
+  dominateUpset tyToTy (inr NsToTy) {N x} () rv qv<rv v<w
+  dominateUpset tyToTy (inr (E x)) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToTy (inr (E x)) {ty} {w = lib} refl rv qv<rv ()
+  dominateUpset tyToTy (inr (E x)) {ty} {w = N x₁} refl rv qv<rv ()
+  dominateUpset tyToTy (inr (E x)) {lib} () rv qv<rv v<w
+  dominateUpset tyToTy (inr (E x)) {N x₁} () rv qv<rv v<w
+  dominateUpset tyToTy (inr tyToTy) {ty} {w = ty} refl refl qv<rv <> = <>
+  dominateUpset tyToTy (inr tyToTy) {ty} {w = lib} refl refl qv<rv ()
+  dominateUpset tyToTy (inr tyToTy) {ty} {w = N x} refl refl qv<rv ()
+  dominateUpset tyToTy (inr tyToTy) {lib} () rv qv<rv v<w
+  dominateUpset tyToTy (inr tyToTy) {N x} () rv qv<rv v<w
+  dominateUpset tyToTy (inr undef) qv () qv<rv v<w
+  dominateUpset undef _ () rv qv<rv v<w
+  dominateUpset tyToLib (inr id) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToLib (inr st) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToLib (inr NsToTy) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToLib (inr (E x)) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToLib (inr tyToTy) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset tyToLib (inr undef) {ty} {w = ty} refl () qv<rv <>
+  dominateUpset tyToLib (inr r) {ty} {w = lib} refl rv qv<rv ()
+  dominateUpset tyToLib (inr r) {ty} {w = N x} refl rv qv<rv ()
+  dominateUpset tyToLib (inr r) {lib} () rv qv<rv v<w
+  dominateUpset tyToLib (inr r) {N x} () rv qv<rv v<w
+  dominateUpset constLib (inr id) {_} {_} {_} {ty} qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr id) {_} {_} {_} {lib} qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr id) {_} {_} {_} {N x} qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr st) qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr NsToTy) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr NsToTy) {ty} {w = lib} qv refl qv<rv ()
+  dominateUpset constLib (inr NsToTy) {lib} {w = lib} qv () qv<rv v<w
+  dominateUpset constLib (inr NsToTy) {N x} {w = lib} qv refl qv<rv ()
+  dominateUpset constLib (inr NsToTy) {w = N x} qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr (E x)) {w = ty} qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr (E x)) {ty} {w = lib} qv refl qv<rv ()
+  dominateUpset constLib (inr (E x)) {lib} {w = lib} qv () qv<rv v<w
+  dominateUpset constLib (inr (E x)) {N x₁} {w = lib} qv refl qv<rv ()
+  dominateUpset constLib (inr (E x)) {w = N x₁} qv rv qv<rv v<w = <>
+  dominateUpset constLib (inr tyToTy) {ty} {w = ty} qv rv qv<rv <> = <>
+  dominateUpset constLib (inr tyToTy) {ty} {w = lib} qv rv qv<rv ()
+  dominateUpset constLib (inr tyToTy) {ty} {w = N x} qv rv qv<rv ()
+  dominateUpset constLib (inr tyToTy) {lib} refl () qv<rv v<w
+  dominateUpset constLib (inr tyToTy) {N x} qv () qv<rv v<w
+  dominateUpset constLib (inr undef) qv () qv<rv v<w
+  dominateUpset NsToLib (inr id) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr st) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr NsToTy) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr (E x)) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr tyToTy) {ty} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr undef) {ty} {w = ty} refl () qv<rv <>
+  dominateUpset NsToLib (inr r) {ty} {w = lib} qv rv qv<rv ()
+  dominateUpset NsToLib (inr r) {ty} {w = N x} qv rv qv<rv ()
+  dominateUpset NsToLib (inr r) {lib} {w = w} () rv qv<rv v<w
+  dominateUpset NsToLib (inr id) {N x} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr st) {N x} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr NsToTy) {N x} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr (E x₁)) {N x} {w = ty} refl rv qv<rv <> = <>
+  dominateUpset NsToLib (inr tyToTy) {N x} {w = ty} refl () qv<rv <>
+  dominateUpset NsToLib (inr undef) {N x} {w = ty} refl () qv<rv <>
+  dominateUpset NsToLib (inr r) {N x} {w = lib} qv rv qv<rv ()
+  dominateUpset NsToLib (inr id) {N x} {w = N .x} refl rv qv<rv refl = <>
+  dominateUpset NsToLib (inr st) {N x} {w = N .x} refl rv qv<rv refl = <>
+  dominateUpset NsToLib (inr NsToTy) {N x} {w = N .x} refl rv qv<rv refl = <>
+  dominateUpset NsToLib (inr (E x₁)) {N x} {w = N .x} refl rv qv<rv refl = <>
+  dominateUpset NsToLib (inr tyToTy) {N x} {w = N .x} refl () qv<rv refl
+  dominateUpset NsToLib (inr undef) {N x} {w = N .x} refl () qv<rv refl
+
+  tyWUpset : {u v : W} -> u << v -> u == ty -> v == ty
+  tyWUpset {v = ty} <> refl = refl
+  tyWUpset {v = lib} () refl
+  tyWUpset {v = N x} () refl
+
+  st&-action : forall q v
+            -> (star& q # v) == ((\_ -> Just ty) =<< (q # v))
+  st&-action tyToLib ty = refl
+  st&-action tyToLib lib = refl
+  st&-action tyToLib (N x) = refl
+  st&-action constLib v = refl
+  st&-action NsToLib ty = refl
+  st&-action NsToLib lib = refl
+  st&-action NsToLib (N x) = refl
+
+  &unst-action : forall q v
+               -> snd (q &unst) # v == ((q #_) =<< (unst v))
+  &unst-action id ty = refl
+  &unst-action id lib = refl
+  &unst-action id (N x) = refl
+  &unst-action st ty = refl
+  &unst-action st lib = refl
+  &unst-action st (N x) = refl
+  &unst-action NsToTy ty = refl
+  &unst-action NsToTy lib = refl
+  &unst-action NsToTy (N x) = refl
+  &unst-action (E x) ty = refl
+  &unst-action (E x) lib = refl
+  &unst-action (E x) (N x₁) = refl
+  &unst-action tyToTy ty = refl
+  &unst-action tyToTy lib = refl
+  &unst-action tyToTy (N x) = refl
+  &unst-action undef ty = refl
+  &unst-action undef lib = refl
+  &unst-action undef (N x) = refl
+
+  &unst&-action : forall q r v
+               -> snd (q &unst& r) # v == ((q #_) =<< (unst =<< (r #? v)))
+  &unst&-action q (inl <>) v = &unst-action q v
+  &unst&-action q (inr id) v = &unst-action q v
+  &unst&-action id (inr st) v = refl
+  &unst&-action st (inr st) v = refl
+  &unst&-action NsToTy (inr st) v = refl
+  &unst&-action (E x) (inr st) v = refl
+  &unst&-action tyToTy (inr st) v = refl
+  &unst&-action undef (inr st) v = refl
+  &unst&-action id (inr NsToTy) ty = refl
+  &unst&-action id (inr NsToTy) lib = refl
+  &unst&-action id (inr NsToTy) (N x) = refl
+  &unst&-action st (inr NsToTy) ty = refl
+  &unst&-action st (inr NsToTy) lib = refl
+  &unst&-action st (inr NsToTy) (N x) = refl
+  &unst&-action NsToTy (inr NsToTy) ty = refl
+  &unst&-action NsToTy (inr NsToTy) lib = refl
+  &unst&-action NsToTy (inr NsToTy) (N x) = refl
+  &unst&-action (E f) (inr NsToTy) ty = refl
+  &unst&-action (E f) (inr NsToTy) lib = refl
+  &unst&-action (E f) (inr NsToTy) (N x) = refl
+  &unst&-action tyToTy (inr NsToTy) ty = refl
+  &unst&-action tyToTy (inr NsToTy) lib = refl
+  &unst&-action tyToTy (inr NsToTy) (N x) = refl
+  &unst&-action undef (inr NsToTy) ty = refl
+  &unst&-action undef (inr NsToTy) lib = refl
+  &unst&-action undef (inr NsToTy) (N x) = refl
+  &unst&-action id (inr (E g)) ty = refl
+  &unst&-action id (inr (E g)) lib = refl
+  &unst&-action id (inr (E g)) (N x) = refl
+  &unst&-action st (inr (E g)) ty = refl
+  &unst&-action st (inr (E g)) lib = refl
+  &unst&-action st (inr (E g)) (N x) = refl
+  &unst&-action NsToTy (inr (E g)) ty = refl
+  &unst&-action NsToTy (inr (E g)) lib = refl
+  &unst&-action NsToTy (inr (E g)) (N x) = refl
+  &unst&-action (E f) (inr (E g)) ty = refl
+  &unst&-action (E f) (inr (E g)) lib = refl
+  &unst&-action (E f) (inr (E g)) (N x) = refl
+  &unst&-action tyToTy (inr (E g)) ty = refl
+  &unst&-action tyToTy (inr (E g)) lib = refl
+  &unst&-action tyToTy (inr (E g)) (N x) = refl
+  &unst&-action undef (inr (E g)) ty = refl
+  &unst&-action undef (inr (E g)) lib = refl
+  &unst&-action undef (inr (E g)) (N x) = refl
+  &unst&-action id (inr tyToTy) ty = refl
+  &unst&-action st (inr tyToTy) ty = refl
+  &unst&-action NsToTy (inr tyToTy) ty = refl
+  &unst&-action (E x) (inr tyToTy) ty = refl
+  &unst&-action tyToTy (inr tyToTy) ty = refl
+  &unst&-action undef (inr tyToTy) ty = refl
+  &unst&-action id (inr tyToTy) lib = refl
+  &unst&-action st (inr tyToTy) lib = refl
+  &unst&-action NsToTy (inr tyToTy) lib = refl
+  &unst&-action (E x) (inr tyToTy) lib = refl
+  &unst&-action tyToTy (inr tyToTy) lib = refl
+  &unst&-action undef (inr tyToTy) lib = refl
+  &unst&-action id (inr tyToTy) (N x) = refl
+  &unst&-action st (inr tyToTy) (N x) = refl
+  &unst&-action NsToTy (inr tyToTy) (N x) = refl
+  &unst&-action (E f) (inr tyToTy) (N x) = refl
+  &unst&-action tyToTy (inr tyToTy) (N x) = refl
+  &unst&-action undef (inr tyToTy) (N x) = refl
+  &unst&-action q (inr undef) v = refl
+
+  isActionL : forall q r {v qrv'}
+          -> ((q & r) # v) == Just qrv'
+          -> Sg W (λ rv' -> Sg ((r # v) == Just rv') (λ _ -> (q # rv') == Just qrv'))
+  isActionL q undef ()
+  isActionL id id qrv = _ , qrv , refl
+  isActionL id st qrv = _ , qrv , refl
+  isActionL id NsToTy qrv = _ , qrv , refl
+  isActionL id (E f) {ty} refl = ty , refl , refl
+  isActionL id (E f) {lib} ()
+  isActionL id (E f) {N x} refl = (N (f $ x)) , refl , refl
+  isActionL id tyToTy {ty} refl = ty , refl , refl
+  isActionL id tyToTy {lib} ()
+  isActionL id tyToTy {N x} ()
+  isActionL st id qrv = _ , refl , qrv
+  isActionL st st qrv = ty , refl , qrv
+  isActionL st NsToTy {ty} refl = ty , refl , refl
+  isActionL st NsToTy {lib} ()
+  isActionL st NsToTy {N x} refl = ty , refl , refl
+  isActionL st (E f) {ty} refl = ty , refl , refl
+  isActionL st (E f) {lib} ()
+  isActionL st (E f) {N x} refl = N (f $ x) , refl , refl
+  isActionL st tyToTy {ty} refl = ty , refl , refl
+  isActionL st tyToTy {lib} ()
+  isActionL st tyToTy {N x} ()
+  isActionL NsToTy id qrv = _ , refl , qrv
+  isActionL NsToTy st qrv = ty , refl , qrv
+  isActionL NsToTy NsToTy {ty} refl = ty , refl , refl
+  isActionL NsToTy NsToTy {lib} ()
+  isActionL NsToTy NsToTy {N x} refl = ty , refl , refl
+  isActionL NsToTy (E f) {ty} refl = ty , refl , refl
+  isActionL NsToTy (E f) {lib} ()
+  isActionL NsToTy (E f) {N x} refl = N (f $ x) , refl , refl
+  isActionL NsToTy tyToTy {ty} refl = ty , refl , refl
+  isActionL NsToTy tyToTy {lib} ()
+  isActionL NsToTy tyToTy {N x} ()
+  isActionL (E f) id qrv = _ , refl , qrv
+  isActionL (E f) st qrv = ty , refl , qrv
+  isActionL (E f) NsToTy {ty} refl = ty , refl , refl
+  isActionL (E f) NsToTy {lib} ()
+  isActionL (E f) NsToTy {N x} refl = ty , refl , refl
+  isActionL (E f) (E g) {ty} refl = ty , refl , refl
+  isActionL (E f) (E g) {lib} ()
+  isActionL (E f) (E g) {N x} refl = (N (g $ x)) , refl , cong (\w -> Just (N w)) (sym (act f g x))
+  isActionL (E f) tyToTy {ty} refl = ty , refl , refl
+  isActionL (E f) tyToTy {lib} ()
+  isActionL (E f) tyToTy {N x} ()
+  isActionL tyToTy id qrv = _ , refl , qrv
+  isActionL tyToTy st qrv = ty , refl , qrv
+  isActionL tyToTy NsToTy {ty} refl = ty , refl , refl
+  isActionL tyToTy NsToTy {lib} ()
+  isActionL tyToTy NsToTy {N x} refl = ty , refl , refl
+  isActionL tyToTy (E g) {ty} refl = ty , refl , refl
+  isActionL tyToTy (E g) {lib} ()
+  isActionL tyToTy (E g) {N x} ()
+  isActionL tyToTy tyToTy {ty} refl = ty , refl , refl
+  isActionL tyToTy tyToTy {lib} ()
+  isActionL tyToTy tyToTy {N x} ()
+  isActionL undef id ()
+  isActionL undef st ()
+  isActionL undef NsToTy ()
+  isActionL undef (E g) ()
+  isActionL undef tyToTy ()
+
+  isActionR : forall q r {v rv' qrv'}
+          -> (r # v) == Just rv'
+          -> (q # rv') == Just qrv'
+          -> ((q & r) # v) == Just qrv'
+  isActionR q id refl qrv = qrv
+  isActionR id st refl qrv = qrv
+  isActionR st st refl qrv = qrv
+  isActionR NsToTy st refl qrv = qrv
+  isActionR (E x) st refl qrv = qrv
+  isActionR tyToTy st refl qrv = qrv
+  isActionR undef st refl ()
+  isActionR id NsToTy {ty} refl qrv = qrv
+  isActionR st NsToTy {ty} refl qrv = qrv
+  isActionR NsToTy NsToTy {ty} refl qrv = qrv
+  isActionR (E x) NsToTy {ty} refl qrv = qrv
+  isActionR tyToTy NsToTy {ty} refl qrv = qrv
+  isActionR undef NsToTy {ty} refl ()
+  isActionR q NsToTy {lib} () qrv
+  isActionR id NsToTy {N x} refl qrv = qrv
+  isActionR st NsToTy {N x} refl qrv = qrv
+  isActionR NsToTy NsToTy {N x} refl qrv = qrv
+  isActionR (E x₁) NsToTy {N x} refl qrv = qrv
+  isActionR tyToTy NsToTy {N x} refl qrv = qrv
+  isActionR undef NsToTy {N x} refl ()
+  isActionR id (E g) {ty} refl qrv = qrv
+  isActionR st (E g) {ty} refl qrv = qrv
+  isActionR NsToTy (E g) {ty} refl qrv = qrv
+  isActionR (E x) (E g) {ty} refl qrv = qrv
+  isActionR tyToTy (E g) {ty} refl qrv = qrv
+  isActionR undef (E g) {ty} refl qrv = qrv
+  isActionR q (E g) {lib} () qrv
+  isActionR id (E g) {N x} refl qrv = qrv
+  isActionR st (E g) {N x} refl qrv = qrv
+  isActionR NsToTy (E g) {N x} refl qrv = qrv
+  isActionR (E f) (E g) {N x} refl refl = cong (\w -> Just (N w)) (act f g x)
+  isActionR tyToTy (E g) {N x} refl qrv = qrv
+  isActionR undef (E g) {N x} refl qrv = qrv
+  isActionR id tyToTy {ty} refl qrv = qrv
+  isActionR st tyToTy {ty} refl qrv = qrv
+  isActionR NsToTy tyToTy {ty} refl qrv = qrv
+  isActionR (E x) tyToTy {ty} refl qrv = qrv
+  isActionR tyToTy tyToTy {ty} refl qrv = qrv
+  isActionR undef tyToTy {ty} refl qrv = qrv
+  isActionR q tyToTy {lib} () qrv
+  isActionR q tyToTy {N x} () qrv
+  isActionR q undef () qrv
+
+  GwqConn : forall (q : Q Real) (w : W) {u qu'} su=w qu {v qv'} sv=w qv
+         -> Star {Sg W (\u -> ty == w * Sg W \qu -> q # u ~ qu)}
+                 (\{(u , _ , qu' , _) (v , _ , qv' , _) -> (u << v) + (qv' << qu')})
+                 (u , su=w , qu' , qu) (v , sv=w , qv' , qv)
+  GwqConn id w {ty} s-u refl {ty} s-v refl = inl <> ,- []
+  GwqConn id w {ty} s-u refl {lib} s-v refl = inr <> ,- []
+  GwqConn id w {ty} s-u refl {N x} s-v refl = inr <> ,- []
+  GwqConn id w {lib} s-u refl {ty} s-v refl = inl <> ,- []
+  GwqConn id w {lib} s-u refl {lib} s-v refl = inl <> ,- []
+  GwqConn id w {lib} s-u refl {N x} s-v refl = inl <> ,- []
+  GwqConn id w {N x} s-u refl {ty} s-v refl = inl <> ,- []
+  GwqConn id w {N x} s-u refl {lib} s-v refl = inr <> ,- []
+  GwqConn id w {N x} s-u refl {N y} s-v refl = _,-_ {y = ty , s-v , ty , refl} (inl <>) (inr <> ,- [])
+  GwqConn st w s-u refl s-v refl = inr <> ,- []
+  GwqConn NsToTy w {ty} s-u refl {ty} s-v refl = inr <> ,- []
+  GwqConn NsToTy w {ty} s-u refl {lib} s-v ()
+  GwqConn NsToTy w {ty} s-u refl {N x} s-v refl = inr <> ,- []
+  GwqConn NsToTy w {lib} s-u () {ty} s-v qv
+  GwqConn NsToTy w {lib} s-u () {lib} s-v qv
+  GwqConn NsToTy w {lib} s-u () {N x} s-v qv
+  GwqConn NsToTy w {N x} s-u refl {ty} s-v refl = inr <> ,- []
+  GwqConn NsToTy w {N x} s-u refl {lib} s-v ()
+  GwqConn NsToTy w {N x} s-u refl {N x₁} s-v refl = inr <> ,- []
+  GwqConn (E f) w {ty} s-u refl {ty} s-v refl = inl <> ,- []
+  GwqConn (E f) w {ty} s-u refl {lib} s-v ()
+  GwqConn (E f) w {ty} s-u refl {N x} s-v refl = inr <> ,- []
+  GwqConn (E f) w {lib} s-u () {ty} s-v qv
+  GwqConn (E f) w {lib} s-u () {lib} s-v qv
+  GwqConn (E f) w {lib} s-u () {N x} s-v qv
+  GwqConn (E f) w {N x} s-u refl {ty} s-v refl = inl <> ,- []
+  GwqConn (E f) w {N x} s-u refl {lib} s-v ()
+  GwqConn (E f) w {N x} s-u refl {N y} s-v refl = _,-_ {y = ty , s-v , ty , refl} (inl <>) (inr <> ,- [])
+  GwqConn tyToTy w {ty} s-u refl {ty} s-v refl = inl <> ,- []
+  GwqConn tyToTy w {ty} s-u refl {lib} s-v ()
+  GwqConn tyToTy w {ty} s-u refl {N x} s-v ()
+  GwqConn tyToTy w {lib} s-u () {ty} s-v qv
+  GwqConn tyToTy w {lib} s-u () {lib} s-v qv
+  GwqConn tyToTy w {lib} s-u () {N x} s-v qv
+  GwqConn tyToTy w {N x} s-u () {ty} s-v qv
+  GwqConn tyToTy w {N x} s-u () {lib} s-v qv
+  GwqConn tyToTy w {N x} s-u () {N x₁} s-v qv
+  GwqConn undef w s-u () s-v ()
+
+  distrib : WorldSystem
+  distrib = record
+              { W = W
+              ; _<<_ = _<<_
+              ; tyW = \w -> w == ty
+              ; Q = Q
+              ; st = st
+              ; _#_ = _#_
+              ; _&_ = _&_
+              ; star& = star&
+              ; unst = unst
+              ; _&unst&_ = _&unst&_
+              ; <<refl = \{w} -> <<refl {w}
+              ; <<trans = \{u}{v}{w} -> <<trans {u}{v}{w}
+              ; st-def = \_ -> ty , refl
+              ; st-unst = st-unst
+              ; defUpset = \{_}{q} -> def-upset q
+              ; op = \{_}{q} -> op q
+              ; dominateUpset = dominateUpset
+              ; stTyW = \_ -> refl
+              ; tyWUpset = tyWUpset
+              ; st&-action = st&-action
+              ; &unst&-action = &unst&-action
+              ; isActionL = \{q}{r} -> isActionL q r
+              ; isActionR = \{q}{r} -> isActionR q r
+              ; stq = \_ _ _ _ -> refl
+              ; GwqConn = GwqConn
+              }
