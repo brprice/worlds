@@ -161,3 +161,79 @@ data SYNEr {n} Ga {m} uner w keepW where
           CHK Ga (st-act w) star T ->
           CHKEr Ga uner w keepW T t t' ->
           SYNEr Ga uner w keepW (t :: T) T t'
+
+-- We have elaborated the rules, so if a CHKEr holds, then the corresponding CHK does
+-- and similarly for SYN
+forgetCHKEr : forall {n Ga m uner w keepW T t t'}
+           -> CHKEr {n} Ga {m} uner w keepW T t t'
+           -> CHK Ga w T t
+forgetSYNEr : forall {n Ga m uner w keepW e S e'}
+           -> SYNEr {n} Ga {m} uner w keepW e S e'
+           -> SYN Ga w e S
+forgetCHKEr (pre S~>T Ttt') = pre S~>T (forgetCHKEr Ttt')
+forgetCHKEr (star tyW) = star tyW
+forgetCHKEr (piEE tyW quw deQUW deSQUW *S *TT') = pi tyW quw *S (forgetCHKEr *TT')
+forgetCHKEr (piArr tyW quw deQUW keSQUW *SS' *TT') = pi tyW quw (forgetCHKEr *SS') (forgetCHKEr *TT')
+forgetCHKEr (piE tyW quw keQUW deSQUW *S *TT') = pi tyW quw *S (forgetCHKEr *TT')
+forgetCHKEr (pi tyW quw keQUW keSQUW *SS' *TT') = pi tyW quw (forgetCHKEr *SS') (forgetCHKEr *TT')
+forgetCHKEr (lamE qw erQW Ttt') = lam qw (forgetCHKEr Ttt')
+forgetCHKEr (lam qw keQW Ttt') = lam qw (forgetCHKEr Ttt')
+forgetCHKEr ([ eSe' ] S=T) = [ forgetSYNEr eSe' ] S=T
+
+forgetSYNEr (post eSe' S~>T) = post (forgetSYNEr eSe') S~>T
+forgetSYNEr (var i u<w) = var i u<w
+forgetSYNEr (appE fSTf' qw erQW Ss) = forgetSYNEr fSTf' $~ qw ~$ Ss
+forgetSYNEr (fSTf' $~ qw ^ keQW ~$ Sss') = forgetSYNEr fSTf' $~ qw ~$ forgetCHKEr Sss'
+forgetSYNEr (*T :~: Ttt') = *T :~: forgetCHKEr Ttt'
+
+
+------------------------------------------------------------------------------
+----- Every typing derivation elaborates to one with erasure -----------------
+------------------------------------------------------------------------------
+-- also, all contexts have a certain number of variables in worlds which are not erased
+eraseCx : forall {n} -> (Ga : Cx n) -> Sg _ (Unerased Ga)
+eraseCx [] = ze , []
+eraseCx (Ga -, (w , S)) with eraseCx Ga
+... | n , erGa with caseEr w (\ke -> kee erGa ke) (\de -> del erGa de)
+... | keep , f , g = su n , g
+... | delete , f , g = n , g
+
+eraseCHK : forall {n Ga m}
+       -> (uner : Unerased Ga m)
+       -> forall {w} keepW {T t}
+       -> CHK {n} Ga w T t
+       -> Sg _ (CHKEr Ga uner w keepW T t)
+eraseSYN : forall {n Ga m}
+       -> (uner : Unerased Ga m)
+       -> forall {w} keepW {e S}
+       -> SYN {n} Ga w e S
+       -> Sg _ (SYNEr Ga uner w keepW e S)
+eraseCHK uner keepW (pre S~>T Tt) with eraseCHK uner keepW Tt
+... | t' , p = t' , pre S~>T p
+eraseCHK uner keepW (star tyW) = star , star tyW
+eraseCHK uner keepW (pi {quw = quw'} tyW quw *S *T)
+  with caseEr (st-act quw') (\ke -> eraseCHK uner ke *S) (\de -> <>)
+     | caseEr quw' (\ke -> eraseCHK (kee uner ke) keepW *T)
+                   (\de -> eraseCHK (del uner de) keepW *T)
+... | keep , keepSQUW , S' , *SS' | keep , keepQUW , T' , *TT' = pi S' T' , pi tyW quw keepQUW keepSQUW *SS' *TT'
+... | keep , keepSQUW , S' , *SS' | delete , delQUW , T' , *TT' = arr S' T' , piArr tyW quw delQUW keepSQUW *SS' *TT'
+... | delete , delSQUW , <> | keep , keepQUW , T' , *TT' = erpi T' , piE tyW quw keepQUW delSQUW *S *TT'
+... | delete , delSQUW , <> | delete , delQUW , T' , *TT' = T' , piEE tyW quw delQUW delSQUW *S *TT'
+eraseCHK uner keepW (lam {qw = qw'} qw Tt)
+  with caseEr qw' (\ke -> eraseCHK (kee uner ke) keepW Tt)
+                  (\de -> eraseCHK (del uner de) keepW Tt)
+... | keep , keepQW , t' , Ttt' = lam t' , lam qw keepQW Ttt'
+... | delete , delQW , t' , Ttt' = t' , lamE qw delQW Ttt'
+eraseCHK uner keepW ([ eS ] S=T) with eraseSYN uner keepW eS
+... | e' , eSe' = e' , [ eSe' ] S=T
+
+eraseSYN uner keepW (post eS S~>T) with eraseSYN uner keepW eS
+... | e' , eSe' = e' , post eSe' S~>T
+eraseSYN uner keepW (var i p) = var _ , var i p
+eraseSYN uner keepW (_$~_~$_ {qw = qw'} fST qw Ss)
+  with eraseSYN uner keepW fST
+     | caseEr qw' (\ke -> eraseCHK uner ke Ss) (\de -> <>)
+... | f' , fSTf' | keep , keeQW , s' , Sss' = f' $ s' , fSTf' $~ qw ^ keeQW ~$ Sss'
+... | f' , fSTf' | delete , delQW , <> = f' , appE fSTf' qw delQW Ss
+eraseSYN uner keepW (*T :~: Tt) with eraseCHK uner keepW Tt
+... | t' , Ttt' = t' , *T :~: Ttt'
