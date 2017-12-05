@@ -82,44 +82,34 @@ presSYN rGa re (post eS S0S') with presSYN rGa re eS
 presSYN rGa (var .i) (var i u<v) rewrite presCxW rGa i = _ , presCxTy rGa i , var i u<v
 presSYN rGa (rf $ rs) (fST $~ qw ~$ Ss) with presSYN rGa rf fST
 ... | _ , STS'T' , f'S'T' with piInvRed STS'T'
-presSYN rGa (_$_ {f}{f'}{s}{s'} rf rs) (_$~_~$_ {_}{f = .f}{.s}{S}{T} fST qw Ss)
+presSYN rGa (rf $ rs) (fST $~ qw ~$ Ss)
   | .(pi _ S' T') , STS'T' , f'S'T'
   | (S' , T' , refl , SS' , TT')
   with presCHK rGa SS' rs Ss
 ... | S's'
-    = let  arg : (s :: S) ~>>* (s' :: S')
-           arg = (rs :: parRefl S) ,- starm (_::_ s') (_::_ (parRefl s')) SS'
-      in   _ , parsStab (starm (si -,_) (parzRefl si ,_) arg) TT'
-             , (f'S'T' $~ qw ~$ S's')
-presSYN {Ga = Ga}{w = w} rGa (beta {q}{t}{t'}{S}{S'}{T}{T'}{s}{s'} tt' SS' TT' ss')
-  (_$~_~$_ {_}{qw'}{S = Si}{Ti} fST q-w Sis)
+  =  _ , substStab (rs ,- []) SS' TT' , (f'S'T' $~ qw ~$ S's')
+presSYN rGa (beta {S = S}{S'}{T}{T'}{s}{s'} tt' SS' TT' ss')
+  (_$~_~$_ {S = Si}{Ti} fST q-w Sis)
   with annInv fST
 ... | *piST , piSTlamt , piSTpiSiTi
   with lamInv piSTlamt | piInvRed piSTpiSiTi
 ... | qw1' , q-w1 , Sc , Tc , SSc , TTc , Tct | .Si , .Ti , refl , SSi , TTi
   with piInvSt q-w *piST
 ... | *S , *T
---  with isActionL sq-w
---... | qw2' , q-w2 , s-qw
   with consensus S (S' ,- Si ,- Sc ,- []) ((SS' ,- []) , SSi , SSc , <>)
      | consensus T (T' ,- Ti ,- Tc ,- []) ((TT' ,- []) , TTi , TTc , <>)
 ...  | Sw , SSw , S'Sw , SiSw , ScSw , <>
      | Tw , TTw , T'Tw , TiTw , TcTw , <>
-  with presCHK rGa [] SS' *S          | presCHK rGa SiSw ss' Sis
+  with presCHK rGa [] SS' *S | presCHK rGa SiSw ss' Sis
      | presCHK (rGa , refl , SSw) [] TT' *T  | presCHK (rGa , refl , ScSw) TcTw tt' Tct
 ...  | hS | hs | hT | ht
   rewrite #functional q-w1 q-w
-    = let yada : forall {Sa} -> Sa ~>>* Sw ->
-                   (si -, (s' :: Sa)) ~~>>* (si -, (s' :: Sw))
-          yada SaSw = starm (si -,_) (parzRefl si ,_)
-                        (starm (s' ::_) (parRefl s' ::_) SaSw)
-          zada = zeMor hS (pre* S'Sw hs) S'Sw
+    = let zada = zeMor hS (pre* S'Sw hs) S'Sw
       in  Sb.act (si -, (s' :: Sw)) Tw
-          , parsStab ((parzRefl si , (ss' :: parRefl Si)) ,- yada SiSw)
-            TiTw
+          , substStab (ss' ,- []) SiSw TiTw
           , post* (substCHK (si -, (s' :: S')) zada hT
                    :~: substCHK (si -, (s' :: S')) zada (pre* T'Tw ht))
-              (parsStab (yada S'Sw) T'Tw)
+              (substStab [] S'Sw T'Tw)
 presSYN rGa (rt :: rT) (T :~: t) =
   _ , (rT ,- []) , (presCHK rGa [] rT T :~: presCHK rGa (rT ,- []) rt t)
 

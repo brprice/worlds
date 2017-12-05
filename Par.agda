@@ -127,6 +127,16 @@ parsStab {sz = sz} {.sz} [] (r ,- rs)
 parsStab {sz = sz} {tz} {s = s} (rz ,- rzs) rs
   = parStab rz (parRefl s) ,- parsStab rzs rs
 
+-- The case of parsStab where we are only substituting var ze
+substStab : {n : Nat}{s s' S S' : Tm n chk}{d : Dir}{T T' : Tm (su n) d}
+         -> s ~>>* s' -> S ~>>* S' -> T ~>>* T'
+        -> Sb.act (si -, (s :: S)) T ~>>* Sb.act (si -, (s' :: S')) T'
+substStab {_}{s}{s'}{S}{S'} s~>s' S~>S' T~>T'
+  = parsStab (starm (si -,_) (parzRefl si ,_)
+                    (starm (s ::_) (parRefl s ::_) S~>S'
+                  ++ starm (_:: S') (_:: parRefl S') s~>s'))
+             T~>T'
+
 parReds : forall {n d}{t t' : Tm n d} -> t ~>> t' -> t ~>* t'
 parReds star = []
 parReds (pi q SS' TT') =
