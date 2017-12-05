@@ -630,6 +630,41 @@ eraseUniqSYN Ga1eqvGa2 uner1 uner2 (*T :~: Tss') (*T' :~: Ttt')
 
 
 ------------------------------------------------------------------------------
+----- Computing just the context and type preserves the erasure --------------
+------------------------------------------------------------------------------
+!~>>*SameUnerThin : forall {n}{Ga Ga' : Cx n}
+                 -> Ga !~>>* Ga'
+                 -> forall {l}(uner : Unerased Ga l)(uner' : Unerased Ga' l)
+                 -> unerThin uner == unerThin uner'
+!~>>*SameUnerThin {Ga = []} {[]} <> [] [] = refl
+!~>>*SameUnerThin {Ga = Ga -, (u , S)} {Ga' -, (v , T)} (Ga~>Ga' , u=v , S~>T) (kee uner keU) (kee uner' keV)
+  = cong os (!~>>*SameUnerThin Ga~>Ga' uner uner')
+!~>>*SameUnerThin {Ga = Ga -, (u , S)} {Ga' -, (v , T)} (Ga~>Ga' , refl , S~>T) (kee uner keU) (del uner' deV)
+  = naughty (erXorKp deV keU)
+!~>>*SameUnerThin {Ga = Ga -, (u , S)} {Ga' -, (v , T)} (Ga~>Ga' , refl , S~>T) (del uner deU) (kee uner' keV)
+  = naughty (erXorKp deU keV)
+!~>>*SameUnerThin {Ga = Ga -, (u , S)} {Ga' -, (v , T)} (Ga~>Ga' , u=v , S~>T) (del uner deU) (del uner' deV)
+  = cong o' (!~>>*SameUnerThin Ga~>Ga' uner uner')
+
+
+presCHKErCxTy : forall {n}{Ga Ga' : Cx n}
+             -> Ga !~>>* Ga'
+             -> forall {l}{uner : Unerased Ga l}{uner'}{w keepW}{T T'}
+             -> T ~>>* T'
+             -> forall {t s}
+             -> CHKEr Ga uner w keepW T t s
+             -> CHKEr Ga' uner' w keepW T' t s
+presCHKErCxTy Ga~>Ga' {uner = uner}{uner'}{keepW = keepW} T~>T' Tts
+  with eraseCHK uner' keepW (presCHK Ga~>Ga' T~>T' (parRefl _) (forgetCHKEr Tts))
+... | s' , T'ts'
+  with eraseUniqCHK (!~>>*ToEquiv Ga~>Ga') uner uner' (~>>*ToEquiv T~>T') Tts T'ts'
+... | thins=thins'
+  rewrite !~>>*SameUnerThin Ga~>Ga' uner uner'
+    | thinErInj thins=thins'
+  = T'ts'
+
+
+------------------------------------------------------------------------------
 ----- Thinnings preserve erasure judgements ----------------------------------
 ------------------------------------------------------------------------------
 
@@ -1137,3 +1172,60 @@ substSYNEr unerGa unerDe ez cxMor erz cxMorEr (_$~_^_~$_ {s = s}{S}{T} fSTf' qw 
   = h
 substSYNEr unerGa unerDe ez cxMor erz cxMorEr (*S :~: Sss')
   = substCHK ez cxMor *S :~: substCHKEr unerGa unerDe ez cxMor erz cxMorEr Sss'
+
+
+------------------------------------------------------------------------------
+----- Boost pre and post rules to allow multistep reduction ------------------
+------------------------------------------------------------------------------
+preEr* : forall {n}{Ga : Cx n}{l}{uner : Unerased Ga l}
+         {w keepW}{T T' t t'}
+      -> T ~>>* T'
+      -> CHKEr Ga uner w keepW T' t t'
+      -> CHKEr Ga uner w keepW T t t'
+preEr* [] T'tt' = T'tt'
+preEr* (T~>R ,- R~>*T') T'tt' = pre T~>R (preEr* R~>*T' T'tt')
+
+postEr* : forall {n}{Ga : Cx n}{l}{uner : Unerased Ga l}
+          {w keepW}{e S S' e'}
+       -> SYNEr Ga uner w keepW e S e'
+       -> S ~>>* S'
+       -> SYNEr Ga uner w keepW e S' e'
+postEr* eSe' [] = eSe'
+postEr* eSe' (S~>R ,- R~>S') = postEr* (post eSe' S~>R) R~>S'
+
+
+------------------------------------------------------------------------------
+----- Inversion principles which strip off pre and post ----------------------
+------------------------------------------------------------------------------
+
+annInvEr : forall {n}{Ga : Cx n}{l}{uner : Unerased Ga l}{w keepW}{t T T' t'}
+        -> SYNEr Ga uner w keepW (t :: T) T' t'
+        -> CHK Ga (st-act w) star T * CHKEr Ga uner w keepW T t t' * (T ~>>* T')
+annInvEr (post tTSt' S~>T') with annInvEr tTSt'
+... | *T , Ttt' , T~>S = *T , Ttt' , T~>S ++ (S~>T' ,- [])
+annInvEr (*T :~: Ttt') = *T , Ttt' , []
+
+-- Inverts some pre then _either_ lam or lamE
+lamInvEr : forall {n}{Ga : Cx n}{l}{uner : Unerased Ga l}{w keepW q S T t d}
+        -> CHKEr Ga uner w keepW (pi q S T) (lam t) d
+        -> Sg _ \S' ->
+           S ~>>* S'
+         * Sg _ \T' ->
+           T ~>>* T'
+         * Sg _ \qw' ->
+           q # w ~ qw'
+         * (  (Sg (er? qw' == keep) \keQW ->
+               Sg _ \e ->
+               d == lam e
+             * CHKEr (Ga -, (qw' , S')) (kee uner keQW) w keepW T' t e)
+           + (Sg (er? qw' == delete) \deQW ->
+              CHKEr (Ga -, (qw' , S')) (del uner deQW) w keepW T' t d)
+           )
+lamInvEr (pre (pi q S~>S' T~>T') S'T'td)
+  with lamInvEr S'T'td
+... | S'' , S'~>S'' , T'' , T'~>T'' , rest
+  = S'' , (S~>S' ,- S'~>S'') , T'' , (T~>T' ,- T'~>T'') , rest
+lamInvEr (lamE qw deQW Ttd)
+  = _ , [] , _ , [] , _ , qw , inr (deQW , Ttd)
+lamInvEr (lam qw keQW Ttd)
+  = _ , [] , _ , [] , _ , qw , inl (keQW , _ , refl , Ttd)

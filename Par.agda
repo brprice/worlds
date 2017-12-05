@@ -46,6 +46,25 @@ redPar (t ::R TT') = parRefl t :: redPar TT'
 redPar beta = beta (parRefl _) (parRefl _) (parRefl _) (parRefl _)
 redPar upsi = upsi (parRefl _)
 
+~>To~>>* : forall {n d}{s t : Tm n d} -> s ~> t -> s ~>>* t
+~>To~>>* s~>t = redPar s~>t ,- []
+
+pi* : forall {n}{S S' : Tm n chk}{T T'} -> S ~>>* S' -> T ~>>* T' -> forall {q} -> pi q S T ~>>* pi q S' T'
+pi* S~>S' T~>T' = starm _ (pi _ (parRefl _)) T~>T' ++ starm _ (\r -> pi _ r (parRefl _)) S~>S'
+
+lam* : forall {n}{t t' : Tm (su n) chk} -> t ~>>* t' -> lam t ~>>* lam t'
+lam* t~>t' = starm _ lam t~>t'
+
+[_]* : forall {n}{e e' : Tm n syn} -> e ~>>* e' -> [ e ] ~>>* [ e' ]
+[ e~>e' ]* = starm _ [_] e~>e'
+
+_$*_ : forall {n}{f f' : Tm n syn}{s s'} -> f ~>>* f' -> s ~>>* s' -> (f $ s) ~>>* (f' $ s')
+f~>f' $* s~>s' = starm _ (parRefl _ $_) s~>s' ++ starm _ (_$ parRefl _) f~>f'
+
+_::*_ : forall {n}{t t' T T' : Tm n chk} -> t ~>>* t' -> T ~>>* T' -> (t :: T) ~>>* (t' :: T')
+t~>t' ::* T~>T' = starm _ (parRefl _ ::_) T~>T' ++ starm _ (_:: parRefl _) t~>t'
+
+
 _~~>>_ : forall {n m} -> Env (Tm m syn) n -> Env (Tm m syn) n -> Set
 [] ~~>> [] = One
 (sz -, s) ~~>> (tz -, t) = (sz ~~>> tz) * (s ~>> t)
@@ -165,6 +184,10 @@ parReds (beta {q}{t}{t'}{S}{S'}{T}{T'}{s}{s'} tt' SS' TT' ss') =
    starm _ (_ $R_) (parReds ss')) ++
   (beta {q = q}{t'}{S'}{T'}{s'} ,- [])
 parReds (upsi tt') = upsi ,- parReds tt'
+
+parsReds : forall {n d}{t t' : Tm n d} -> t ~>>* t' -> t ~>* t'
+parsReds [] = []
+parsReds (t~>t' ,- t'~>t'') = parReds t~>t' ++ parsReds t'~>t''
 
 starInvRed : forall {n}{U : Tm n chk} -> star ~>>* U -> U == star
 starInvRed [] = refl
