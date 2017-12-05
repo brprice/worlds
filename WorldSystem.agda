@@ -34,8 +34,6 @@ data Sort : Set where Real Fake : Sort
 -- Real is things where any unstar is "guarded" on the left by a star: star & q & unstar & r
 -- Only Real ones are allowed to appear in terms, the Fake ones are to prove subsumption
 -- (Could conflate the two, but then two worlds system fails dominateUpset. We are being a bit more fine-grained)
-
--- TODO: This is not the complete specification...
 record WorldSystem : Set₁ where
   field
     W : Set
