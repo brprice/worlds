@@ -76,6 +76,11 @@ parThin th (beta {q}{t}{t'}{S}{S'}{T}{T'}{s}{s'} rt rS rT rs)
           = z
 parThin th (upsi rt) = upsi (parThin th rt)
 
+parsThin : forall {d n m}{s t : Tm n d}(th : n <= m) ->
+           s ~>>* t -> Th.act th s ~>>* Th.act th t
+parsThin th [] = []
+parsThin th (s~>>t ,- t~>>*r) = parThin th s~>>t ,- parsThin th t~>>*r
+
 parThinz : forall {n m m'}(sz tz : Env (Tm m syn) n)(th : m <= m') ->
   sz ~~>> tz -> env (Th.act th) sz ~~>> env (Th.act th) tz
 parThinz []        []        th <> = <>
