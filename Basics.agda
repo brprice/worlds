@@ -17,6 +17,9 @@ cong : forall {l}{X : Set l}{m}{Y : Set m}
     -> f x1 == f x2
 cong f refl = refl
 
+subst : {A : Set}(B : A -> Set){x y : A} -> x == y -> B x -> B y
+subst B refl b = b
+
 _-_ : forall {i j k}{A : Set i}{B : A -> Set j}{C : (a : A) -> B a -> Set k} ->
         (f : {a : A}(b : B a) -> C a b)(g : (a : A) -> B a)(a : A) -> C a (g a)
 (f - g) x = f (g x)

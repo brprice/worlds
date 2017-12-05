@@ -512,10 +512,8 @@ subsumeCHK' {v = v}{w} Ga De def q qv vw (pi {r}{S = S} p ru-qv *S *T)
                         (starSg&-pf (defUpsetPf assoc-ruq-v vw))
     in pi (tyWUpset (op? q qv vw) p)
           (defUpset-comm-unst-act ru-qv qv vw)
-          (subst worlds-same *Sw)
+          (subst (\w' -> CHK (Ga < _ >< De ^ subsumeCxHoleDef def vw) w' star _) worlds-same *Sw)
           (subsumeCHK' Ga (De -, (r &unst& q , S)) (def , _ , assoc-ruq-v) q qv vw *T)
-  where subst : forall {GD T t w w'} -> w == w' -> CHK GD w T t -> CHK GD w' T t
-        subst refl x = x
 subsumeCHK' Ga De def q qv vw (lam rqv Tt)
   = lam (defUpsetCommAct' _ q _ qv rqv vw)
         (subsumeCHK' Ga (De -, ((_ , _ &' q) , _)) (def , _ , isActionR' _ q _ qv rqv) q qv vw Tt)
@@ -535,11 +533,9 @@ subsumeSYN' Ga De def q qv vw (*S :~: Ss)
         worlds-same : st-act (defUpset?Act q qv vw)
                    == defUpsetAct (isActionR' st q _ qv (st-pr _)) vw
         worlds-same = st-functional (defUpsetCommAct' st q _ qv (st-pr _) vw)
-    in subst (sym worlds-same) *Sw
+    in subst (\w' -> CHK (Ga < _ >< De ^ subsumeCxHoleDef def vw) w' star _) (sym worlds-same) *Sw
     :~:
     subsumeCHK' Ga De def q qv vw Ss
-  where subst : forall {GD T t w w'} -> w == w' -> CHK GD w T t -> CHK GD w' T t
-        subst refl x = x
 
 subsumeCHK : forall {n v w}
              (Ga : Cx n)
