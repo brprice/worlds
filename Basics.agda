@@ -55,6 +55,12 @@ S * T = Sg S \ _ -> T
 infixr 4 _,_ _*_
 open Sg public
 
+Sg= : {S : Set}{T : S -> Set}
+   -> {a c : S} -> (p : a == c)
+   -> {b : T a}{d : T c} -> subst T p b == d
+   -> (a , b) == (c , d)
+Sg= refl refl = refl
+
 record One : Set where
   constructor <>
 

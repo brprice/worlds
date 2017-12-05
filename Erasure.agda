@@ -627,3 +627,513 @@ eraseUniqSYN Ga1eqvGa2 uner1 uner2 (fAB $~ qw1 ^ keepQW1 ~$ As) (fCD $~ qw2 ^ ke
   = substEquiv AeqvC BeqvD _ , refl
 eraseUniqSYN Ga1eqvGa2 uner1 uner2 (*T :~: Tss') (*T' :~: Ttt')
   = equivRefl , eraseUniqCHK Ga1eqvGa2 uner1 uner2 equivRefl Tss' Ttt'
+
+
+------------------------------------------------------------------------------
+----- Thinnings preserve erasure judgements ----------------------------------
+------------------------------------------------------------------------------
+
+-- As we are working with de Bruijn, the erasures will not be equal on the nose,
+-- since the indices will mean something different. Thus we prove that
+-- thinnings commute with erasures in the appropriate sense.
+
+-- Thinnings of whole contexts give rise to thinnings of erased contexts
+thinUnerased : forall {n m}(th : n <= m)
+            -> forall {Ga De} -> (thC : ThinC th Ga De)
+            -> forall {l}(unerGa : Unerased Ga l)
+            -> forall {k}(unerDe : Unerased De k)
+            -> l <= k
+thinUnerased oz {[]} {[]} thC [] [] = oz
+thinUnerased (os th) {Ga -, _} {De -, _} (thC , _ , _) (kee unerGa _) (kee unerDe _)
+  = os (thinUnerased th thC unerGa unerDe)
+thinUnerased (os th) {Ga -, _} {De -, _} (thC , _ , _) (del unerGa _) (del unerDe _)
+  = thinUnerased th thC unerGa unerDe
+thinUnerased (os th) {Ga -, _} {De -, _} (thC , refl , _) (kee unerGa ke) (del unerDe de)
+  = naughty (erXorKp de ke)
+thinUnerased (os th) {Ga -, _} {De -, _} (thC , refl , _) (del unerGa de) (kee unerDe ke)
+  = naughty (erXorKp de ke)
+thinUnerased (o' th) {Ga} {De -, _} thC unerGa (kee unerDe _) = o' (thinUnerased th thC unerGa unerDe)
+thinUnerased (o' th) {Ga} {De -, _} thC unerGa (del unerDe _) = thinUnerased th thC unerGa unerDe
+
+-- The thinnings fit in the obvious commutative square
+thinUnerasedCo : forall {n m}(th : n <= m)
+              -> forall {Ga De} -> (thC : ThinC th Ga De)
+              -> forall {l}(unerGa : Unerased Ga l)
+              -> forall {k}(unerDe : Unerased De k)
+              -> (th -<- unerThin unerGa) == ((unerThin unerDe) -<- (thinUnerased th thC unerGa unerDe))
+thinUnerasedCo oz thC [] [] = refl
+thinUnerasedCo (os th) (thC , _ , _) (kee unerGa _) (kee unerDe _) = cong os (thinUnerasedCo th thC unerGa unerDe)
+thinUnerasedCo (os th) (thC , refl , _) (kee unerGa ke) (del unerDe de) = naughty (erXorKp de ke)
+thinUnerasedCo (os th) (thC , refl , _) (del unerGa de) (kee unerDe ke) = naughty (erXorKp de ke)
+thinUnerasedCo (os th) (thC , _ , _) (del unerGa _) (del unerDe _) = cong o' (thinUnerasedCo th thC unerGa unerDe)
+thinUnerasedCo (o' th) thC unerGa (kee unerDe _) = cong o' (thinUnerasedCo th thC unerGa unerDe)
+thinUnerasedCo (o' th) thC unerGa (del unerDe _) = cong o' (thinUnerasedCo th thC unerGa unerDe)
+
+-- thinUnerased preserves identity thinnings
+thinUnerasedId : forall {n Ga l}(unerGa : Unerased {n} Ga l)
+              -> thinUnerased oi (idThinC Ga) unerGa unerGa == oi
+thinUnerasedId [] = refl
+thinUnerasedId (kee unerGa keW) = cong os (thinUnerasedId unerGa)
+thinUnerasedId (del unerGa deW) = thinUnerasedId unerGa
+
+
+-- helper for thinSYNEr var case
+eraseVarThinUnerasedCo : forall {n m}(th : n <= m)
+                      -> forall {Ga De} -> (thC : ThinC th Ga De)
+                      -> forall {l}(unerGa : Unerased Ga l)
+                      -> forall {k}(unerDe : Unerased De k)
+                      -> forall i -> (keepGa : er? (cxW Ga i) == keep)(keepDe : er? (cxW De (thin th i)) == keep)
+                      -> thin (thinUnerased th thC unerGa unerDe) (eraseVar unerGa i keepGa)
+                      == eraseVar unerDe (thin th i) keepDe
+eraseVarThinUnerasedCo th thC unerGa unerDe i keepGa keepDe = thinInj (unerThin unerDe) help
+  where help : thin (unerThin unerDe)
+                    (thin (thinUnerased th thC unerGa unerDe)
+                          (eraseVar unerGa i keepGa))
+            == thin (unerThin unerDe)
+                    (eraseVar unerDe (thin th i) keepDe)
+        help rewrite thinCo (unerThin unerDe)
+                            (thinUnerased th thC unerGa unerDe)
+                            (eraseVar unerGa i keepGa)
+                   | sym (thinUnerasedCo th thC unerGa unerDe)
+                   | sym (thinCo th
+                            (unerThin unerGa)
+                            (eraseVar unerGa i keepGa))
+                   | thinErase unerGa i keepGa
+                   | thinErase unerDe (thin th i) keepDe
+          = refl
+
+-- thinnings preserve erasures
+thinCHKEr : forall {n m}(th : n <= m)
+         -> forall {Ga De} -> (thC : ThinC th Ga De)
+         -> forall {l}(unerGa : Unerased Ga l)
+         -> forall {k}(unerDe : Unerased De k)
+         -> forall {w keepW T t t'}
+         -> CHKEr Ga unerGa w keepW T t t'
+         -> CHKEr De unerDe
+                  w keepW (Th.act th T) (Th.act th t)
+                  (thinEr (thinUnerased th thC unerGa unerDe) t')
+thinSYNEr : forall {n m}(th : n <= m)
+         -> forall {Ga De} -> (thC : ThinC th Ga De)
+         -> forall {l}(unerGa : Unerased Ga l)
+         -> forall {k}(unerDe : Unerased De k)
+         -> forall {w keepW e S e'}
+         -> SYNEr Ga unerGa w keepW e S e'
+         -> SYNEr De unerDe
+                  w keepW (Th.act th e) (Th.act th S)
+                  (thinEr (thinUnerased th thC unerGa unerDe) e')
+thinCHKEr th thC unerGa unerDe (pre S~>T Ttt') = pre (parThin th S~>T) (thinCHKEr th thC unerGa unerDe Ttt')
+thinCHKEr th thC unerGa unerDe (star tyW) = star tyW
+thinCHKEr th thC unerGa unerDe (piEE tyW quw erQUW erSQUW *S *TT')
+  = piEE tyW quw erQUW erSQUW
+         (thinCHK th thC *S)
+         (thinCHKEr (os th) (thC , refl , refl) (del unerGa erQUW) (del unerDe erQUW) *TT')
+thinCHKEr th thC unerGa unerDe (piArr tyW quw erQUW keepSQUW *SS' *TT')
+  = piArr tyW quw erQUW keepSQUW
+          (thinCHKEr th thC unerGa unerDe *SS')
+          (thinCHKEr (os th) (thC , refl , refl) (del unerGa erQUW) (del unerDe erQUW) *TT')
+thinCHKEr th thC unerGa unerDe (piE tyW quw keepQUW erSQUW *S *TT')
+  = piE tyW quw keepQUW erSQUW
+        (thinCHK th thC *S)
+        (thinCHKEr (os th) (thC , refl , refl) (kee unerGa keepQUW) (kee unerDe keepQUW) *TT')
+thinCHKEr th thC unerGa unerDe (pi tyW quw keepQUW keepSQUW *SS' *TT')
+  = pi tyW quw keepQUW keepSQUW
+       (thinCHKEr th thC unerGa unerDe *SS')
+       (thinCHKEr (os th) (thC , refl , refl) (kee unerGa keepQUW) (kee unerDe keepQUW) *TT')
+thinCHKEr th thC unerGa unerDe (lamE qw erQW Ttt')
+  = lamE qw erQW (thinCHKEr (os th) (thC , refl , refl) (del unerGa erQW) (del unerDe erQW) Ttt')
+thinCHKEr th thC unerGa unerDe (lam qw keepQW Ttt')
+  = lam qw keepQW (thinCHKEr (os th) (thC , refl , refl) (kee unerGa keepQW) (kee unerDe keepQW) Ttt')
+thinCHKEr th thC unerGa unerDe ([ eSe' ] refl ) = [ thinSYNEr th thC unerGa unerDe eSe' ] refl
+
+thinSYNEr th thC unerGa unerDe (post eSe' S~>T) = post (thinSYNEr th thC unerGa unerDe eSe') (parThin th S~>T)
+thinSYNEr th {Ga}{De} thC unerGa unerDe {w}{keepW} (var i u<w)
+  rewrite cxTyThin th _ _ thC i
+        | eraseVarThinUnerasedCo th thC unerGa unerDe i
+              (downsetKeep u<w keepW)
+              (downsetKeep (subst (_<< w) (cxWThin th _ _ thC i) u<w) keepW)
+  = var (thin th i) (subst (_<< w) (cxWThin th _ _ thC i) u<w)
+thinSYNEr th thC unerGa unerDe (appE {s = s}{S}{T} fSTf' qw erQW Ss)
+  with appE (thinSYNEr th thC unerGa unerDe fSTf') qw erQW (thinCHK th thC Ss)
+... | h rewrite ActCo.actCo SUBSTTHINSUBST (si -, Th.act th (s :: S)) (os th) T
+              | ActCo.actCo THINSUBSTSUBST th (si -, (s :: S)) T
+              | thin/idQ th = h
+thinSYNEr th thC unerGa unerDe (_$~_^_~$_ {s = s}{S}{T} fSTf' qw keepQW Sss')
+  with thinSYNEr th thC unerGa unerDe fSTf' $~ qw ^ keepQW ~$ thinCHKEr th thC unerGa unerDe Sss'
+... | h rewrite ActCo.actCo SUBSTTHINSUBST (si -, Th.act th (s :: S)) (os th) T
+              | ActCo.actCo THINSUBSTSUBST th (si -, (s :: S)) T
+              | thin/idQ th = h
+thinSYNEr th thC unerGa unerDe (*S :~: Stt') = thinCHK th thC *S :~: thinCHKEr th thC unerGa unerDe Stt'
+
+
+------------------------------------------------------------------------------
+----- Subsumption and Erasure  -----------------------------------------------
+------------------------------------------------------------------------------
+
+subsumeUnerThin : forall {n}(Ga : Cx n){m}(De : CxHole n m){v}(def : CxHoleDef De v)
+                  {w}(v<w : v << w)(keepW : er? w == keep)
+                  {l}(unerV : Unerased (Ga < v >< De ^ def) l)
+                  (unerW : Unerased (Ga < w >< De ^ subsumeCxHoleDef def v<w) l)
+               -> unerThin unerV == unerThin unerW
+subsumeUnerThin Ga (De -, (_ , _)) (def , _) v<w keepW (kee unerV keqv) (kee unerW keqw)
+  = cong os (subsumeUnerThin Ga De def v<w keepW unerV unerW)
+subsumeUnerThin Ga (De -, ((_ , q) , _)) (def , (qv' , qv)) v<w keepW (kee unerV keqv) (del unerW deqw)
+  = naughty (erXorKp deqw (noStraddle v<w keepW q qv keqv))
+subsumeUnerThin Ga (De -, (_ , _)) (def , qv' , qv) v<w keepW (del unerV deqv) (kee unerW keqw)
+  = naughty (erXorKp (upsetEr (op qv v<w) deqv) keqw)
+subsumeUnerThin Ga (De -, (_ , _)) (def , _) v<w keepW (del unerV deqv) (del unerW deqw)
+  = cong o' (subsumeUnerThin Ga De def v<w keepW unerV unerW)
+subsumeUnerThin [] [] <> v<w keepW [] [] = refl
+subsumeUnerThin (Ga -, _) [] <> v<w keepW (kee unerV kew1) (kee unerW kew2)
+  = cong os (subsumeUnerThin Ga [] <> v<w keepW unerV unerW)
+subsumeUnerThin (Ga -, _) [] <> v<w keepW (kee unerV kew1) (del unerW dew2) = naughty (erXorKp dew2 kew1)
+subsumeUnerThin (Ga -, _) [] <> v<w keepW (del unerV dew1) (kee unerW kew2) = naughty (erXorKp dew1 kew2)
+subsumeUnerThin (Ga -, _) [] <> v<w keepW (del unerV dew1) (del unerW dew2)
+  = cong o' (subsumeUnerThin Ga [] <> v<w keepW unerV unerW)
+
+
+subsumeVarEr' : forall {n}(Ga : Cx n){m}(De : CxHole n m){v}(def : CxHoleDef De v)
+              {l}(unerV : Unerased (Ga < v >< De ^ def) l)
+              {w}(v<w : v << w)(keepW : er? w == keep)
+              (unerW : Unerased (Ga < w >< De ^ subsumeCxHoleDef def v<w) l)
+              i
+              (keV : er? (cxW (Ga < v >< De ^ def) i) == keep)
+              (keW : er? (cxW (Ga < w >< De ^ subsumeCxHoleDef def v<w) i) == keep)
+           -> eraseVar unerV i keV == eraseVar unerW i keW
+subsumeVarEr' Ga De def unerV v<w keepW unerW i keV keW
+  with thinErase unerV i keV | thinErase unerW i keW
+... | p | q rewrite subsumeUnerThin Ga De def v<w keepW unerV unerW
+  = thinInj (unerThin unerW) (trans p (sym q))
+
+subsumeCHKEr' : forall {n}(Ga : Cx n){m}(De : CxHole n m){v}(def : CxHoleDef De v)
+                {l}(unerV : Unerased (Ga < v >< De ^ def) l)
+                (q : Q'){qv'}(qv : q #' v ~ qv'){keepQV}
+                {w}(v<w : v << w) keepW
+                (unerW : Unerased (Ga < w >< De ^ subsumeCxHoleDef def v<w) l)
+                {T t t'}
+             -> CHKEr (Ga < v >< De ^ def) unerV qv' keepQV T t t'
+             -> CHKEr (Ga < w >< De ^ subsumeCxHoleDef def v<w)
+                      unerW (defUpset?Act q qv v<w)
+                      (noStraddle? v<w keepW q qv keepQV)
+                      T t t'
+subsumeSYNEr' : forall {n}(Ga : Cx n){m}(De : CxHole n m){v}(def : CxHoleDef De v)
+                {l}(unerV : Unerased (Ga < v >< De ^ def) l)
+                (q : Q'){qv'}(qv : q #' v ~ qv'){keepQV}
+                {w}(v<w : v << w) keepW
+                (unerW : Unerased (Ga < w >< De ^ subsumeCxHoleDef def v<w) l)
+                {e S e'}
+             -> SYNEr (Ga < v >< De ^ def) unerV qv' keepQV e S e'
+             -> SYNEr (Ga < w >< De ^ subsumeCxHoleDef def v<w)
+                      unerW (defUpset?Act q qv v<w)
+                      (noStraddle? v<w keepW q qv keepQV)
+                      e S e'
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (pre S~>T Ttt')
+  = pre S~>T (subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW Ttt')
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (star tyQV) = star (tyWUpset (op? q qv v<w) tyQV)
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (piEE {r} tyQV ru-qv deRUQV deSRUQV *S *TT')
+  = let ruq-v = &unst&-actionL r q ru-qv qv
+        ruqv<ruqw = op ruq-v v<w
+        *Sw : CHK (Ga < _ >< De ^ _)
+                  (defUpsetAct (starSg&-pf ruq-v) v<w)
+                  star _
+        *Sw = subsumeCHK' Ga De def (inr (starSg& (r &unst& q))) (starSg&-pf ruq-v) v<w *S
+        worlds-same : defUpsetAct (starSg&-pf ruq-v) v<w
+                   == st-act (defUpsetAct ruq-v v<w)
+        worlds-same = #functional
+                      (defUpsetPf (starSg&-pf (&unst&-actionL r q ru-qv qv)) v<w)
+                      (starSg&-pf (defUpsetPf ruq-v v<w))
+    in piEE (tyWUpset (op? q qv v<w) tyQV)
+            (defUpset-comm-unst-act ru-qv qv v<w)
+            (upsetEr ruqv<ruqw deRUQV)
+            (upsetEr (st-op ruqv<ruqw) deSRUQV)
+            (subst (\w' -> CHK (Ga < _ >< De ^ subsumeCxHoleDef def v<w) w' star _) worlds-same *Sw)
+            (subsumeCHKEr' Ga (De -, _) (def , _ , ruq-v) _ q qv v<w keepW _ *TT')
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (piArr {r} tyQV ru-qv deRUQV keSRUQV *SS' *TT')
+  = let ruq-v = &unst&-actionL r q ru-qv qv
+        ruqv<ruqw = op ruq-v v<w
+        keSRUQW = noStraddle v<w keepW (starSg& (r &unst& q)) (starSg&-pf ruq-v) keSRUQV
+        *SS'w : CHKEr (Ga < _ >< De ^ _) unerW
+                      (defUpsetAct (starSg&-pf ruq-v) v<w)
+                      keSRUQW star _ _
+        *SS'w = subsumeCHKEr' Ga De def unerV
+                              (inr (starSg& (r &unst& q)))
+                              (starSg&-pf ruq-v)
+                              v<w keepW unerW *SS'
+        worlds-same : defUpsetAct (starSg&-pf ruq-v) v<w
+                   == st-act (defUpsetAct ruq-v v<w)
+        worlds-same = #functional
+                      (defUpsetPf (starSg&-pf (&unst&-actionL r q ru-qv qv)) v<w)
+                      (starSg&-pf (defUpsetPf ruq-v v<w))
+    in piArr (tyWUpset (op? q qv v<w) tyQV)
+             (defUpset-comm-unst-act ru-qv qv v<w)
+             (upsetEr ruqv<ruqw deRUQV)
+             (trans (cong er? (defUpsetCommStarAct ruq-v v<w)) keSRUQW)
+             (subst (\wke -> CHKEr (Ga < _ >< De ^ subsumeCxHoleDef def v<w) unerW (fst wke) (snd wke) star _ _)
+                    (Sg= worlds-same (uip _ _))
+                    *SS'w)
+             (subsumeCHKEr' Ga (De -, _) (def , _ , ruq-v) _ q qv v<w keepW _ *TT')
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (piE {r} tyQV ru-qv keRUQV deSRUQV *S *TT')
+  = let ruq-v = &unst&-actionL r q ru-qv qv
+        ruqv<ruqw = op ruq-v v<w
+        *Sw : CHK (Ga < _ >< De ^ _)
+                  (defUpsetAct (starSg&-pf ruq-v) v<w)
+                  star _
+        *Sw = subsumeCHK' Ga De def (inr (starSg& (r &unst& q))) (starSg&-pf ruq-v) v<w *S
+        worlds-same : defUpsetAct (starSg&-pf ruq-v) v<w
+                   == st-act (defUpsetAct ruq-v v<w)
+        worlds-same = #functional
+                      (defUpsetPf (starSg&-pf (&unst&-actionL r q ru-qv qv)) v<w)
+                      (starSg&-pf (defUpsetPf ruq-v v<w))
+    in piE (tyWUpset (op? q qv v<w) tyQV)
+           (defUpset-comm-unst-act ru-qv qv v<w)
+           (noStraddle v<w keepW (snd (r &unst& q)) ruq-v keRUQV)
+           (upsetEr (st-op ruqv<ruqw) deSRUQV)
+           (subst (\w' -> CHK (Ga < _ >< De ^ subsumeCxHoleDef def v<w) w' star _) worlds-same *Sw)
+           (subsumeCHKEr' Ga (De -, _) (def , _ , ruq-v) _ q qv v<w keepW _ *TT')
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (pi {r} tyQV ru-qv keRUQV keSRUQV *SS' *TT')
+  = let ruq-v = &unst&-actionL r q ru-qv qv
+        ruqv<ruqw = op ruq-v v<w
+        keSRUQW = noStraddle v<w keepW (starSg& (r &unst& q)) (starSg&-pf ruq-v) keSRUQV
+        *SS'w : CHKEr (Ga < _ >< De ^ _) unerW
+                      (defUpsetAct (starSg&-pf ruq-v) v<w)
+                      keSRUQW star _ _
+        *SS'w = subsumeCHKEr' Ga De def unerV
+                              (inr (starSg& (r &unst& q)))
+                              (starSg&-pf ruq-v)
+                              v<w keepW unerW *SS'
+        worlds-same : defUpsetAct (starSg&-pf ruq-v) v<w
+                   == st-act (defUpsetAct ruq-v v<w)
+        worlds-same = #functional
+                      (defUpsetPf (starSg&-pf (&unst&-actionL r q ru-qv qv)) v<w)
+                      (starSg&-pf (defUpsetPf ruq-v v<w))
+    in pi (tyWUpset (op? q qv v<w) tyQV)
+          (defUpset-comm-unst-act ru-qv qv v<w)
+          (noStraddle v<w keepW (snd (r &unst& q)) ruq-v keRUQV)
+          (trans (cong er? (defUpsetCommStarAct ruq-v v<w)) keSRUQW)
+          (subst (\wke -> CHKEr (Ga < _ >< De ^ subsumeCxHoleDef def v<w) unerW (fst wke) (snd wke) star _ _)
+                 (Sg= worlds-same (uip _ _))
+                 *SS'w)
+          (subsumeCHKEr' Ga (De -, _) (def , _ , ruq-v) _ q qv v<w keepW _ *TT')
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (lamE {r} rqv deRQV Ttt')
+  = lamE (defUpsetCommAct' r q _  qv rqv v<w)
+         (upsetEr (op (isActionR' r q _ qv rqv) v<w) deRQV)
+         (subsumeCHKEr' Ga (De -, _) (def , _ , isActionR' r q _ qv rqv) _ q qv v<w keepW _ Ttt')
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW (lam {r} rqv keRQV Ttt')
+  = lam (defUpsetCommAct' r q _  qv rqv v<w)
+        (noStraddle? v<w keepW (inr (r &' q)) (isActionR' r q _ qv rqv) keRQV)
+        (subsumeCHKEr' Ga (De -, _) (def , _ , isActionR' r q _ qv rqv) _ q qv v<w keepW _ Ttt')
+subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW ([ eSe' ] S=T)
+  = [ subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW eSe' ] S=T
+subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW (post eSe' S~>T)
+  = post (subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW eSe') S~>T
+subsumeSYNEr' Ga De def unerV q qv {keepQV} v<w keepW unerW (var i u<qv)
+  rewrite subsumeTy Ga De def v<w i
+        | subsumeVarEr' Ga De def unerV v<w keepW unerW i
+            (downsetKeep u<qv keepQV)
+            (downsetKeep (subsumeW Ga De def v<w i q qv u<qv) (noStraddle? v<w keepW q qv keepQV))
+    = var i (subsumeW Ga De def v<w i q qv u<qv)
+subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW (appE {r} fSTf' rqv deRQV Ss)
+  = appE (subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW fSTf')
+         (defUpsetCommAct' r q _ qv rqv v<w) (upsetEr (op (isActionR' r q _ qv rqv) v<w) deRQV)
+         (subsumeCHK' Ga De def (inr (r &' q)) (isActionR' r q _ qv rqv) v<w Ss)
+subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW (_$~_^_~$_ {r} fSTf' rqv keRQV Sss')
+  = subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW fSTf'
+    $~ defUpsetCommAct' r q _ qv rqv v<w
+      ^ noStraddle? v<w keepW (inr (r &' q)) (isActionR' r q _ qv rqv) keRQV ~$
+    subsumeCHKEr' Ga De def unerV (inr (r &' q)) (isActionR' r q _ qv rqv) v<w keepW unerW Sss'
+subsumeSYNEr' Ga De def unerV q qv v<w keepW unerW (*S :~: Sss')
+  with subsumeCHK' Ga De def (inr (st &' q)) (isActionR' st q _ qv (st-pr _)) v<w *S
+... | *Sw rewrite sym (st-functional (defUpsetCommAct' st q _ qv (st-pr _) v<w))
+  = *Sw :~: subsumeCHKEr' Ga De def unerV q qv v<w keepW unerW Sss'
+
+subsumeCHKEr : forall {n}{Ga : Cx n}{m}(uner : Unerased Ga m)
+               {v w}(v<w : v << w)
+               keepW {keepV T t t'}
+            -> CHKEr Ga uner v keepV T t t'
+            -> CHKEr Ga uner w keepW T t t'
+subsumeCHKEr {Ga = Ga} uner v<w keepW Ttt'
+  = subsumeCHKEr' Ga [] <> uner (inl <>) refl v<w keepW uner Ttt'
+
+subsumeSYNEr : forall {n}{Ga : Cx n}{m}(uner : Unerased Ga m)
+               {v w}(v<w : v << w)
+               keepW {keepV e S e'}
+            -> SYNEr Ga uner v keepV e S e'
+            -> SYNEr Ga uner w keepW e S e'
+subsumeSYNEr {Ga = Ga} uner v<w keepW Ttt'
+  = subsumeSYNEr' Ga [] <> uner (inl <>) refl v<w keepW uner Ttt'
+
+
+------------------------------------------------------------------------------
+----- Substitution and Erasure -----------------------------------------------
+------------------------------------------------------------------------------
+
+-- CxMorEr is like a CxMor, but we care about the erasures also
+-- We could compute this data from a CxMor, since every judgement in an unerased world
+-- elaborates to one with erasure, but it is easier to assume it seperately.
+CxMorEr : {m : Nat} -> (De : Cx m)
+       -> {k : Nat} -> Unerased De k
+       -> {n : Nat} -> (Ga : Cx n)
+       -> {l : Nat} -> Unerased Ga l
+       -> Env (Tm m syn) n -> Env (Er k) l -> Set
+CxMorEr De unerDe [] [] _ _ = One
+CxMorEr De unerDe (Ga -, (w , S)) (kee unerGa ke) (ez -, e) (erz -, e')
+  = CxMorEr De unerDe Ga unerGa ez erz * SYNEr De unerDe w ke e (Sb.act ez S) e'
+CxMorEr De unerDe (Ga -, (_ , _)) (del unerGa de) (ez -, _) erz = CxMorEr De unerDe Ga unerGa ez erz
+
+-- We can indeed compute a CxMorEr from a CxMor
+eraseCxMor : forall {m}(De : Cx m){k}(unerDe : Unerased De k)
+          -> forall {n}(Ga : Cx n){l}(unerGa : Unerased Ga l)
+          -> (ez : Env (Tm m syn) n)
+          -> CxMor De Ga ez
+          -> Sg (Env (Er k) l) (CxMorEr De unerDe Ga unerGa ez)
+eraseCxMor De unerDe [] [] [] <> = [] , <>
+eraseCxMor De unerDe (Ga -, (w , S)) (kee unerGa keW) (ez -, e) (cxMor , eS)
+  with eraseCxMor De unerDe Ga unerGa ez cxMor | eraseSYN unerDe keW eS
+... | erz , cxMorEr | e' , eSe' = (erz -, e') , (cxMorEr , eSe')
+eraseCxMor De unerDe (Ga -, (w , S)) (del unerGa deW) (ez -, e) (cxMor , eS)
+  = eraseCxMor De unerDe Ga unerGa ez cxMor
+
+thinCxMorEr : forall {m l}(th : m <= l){De k} unerDe {Th j} unerTh
+           -> (thC : ThinC th De Th)
+           -> forall {n Ga i} unerGa ez erz
+           -> CxMorEr {m} De {k} unerDe {n} Ga {i} unerGa ez erz
+           -> CxMorEr {l} Th {j} unerTh Ga unerGa
+                      (env (Th.act th) ez)
+                      (env (thinEr (thinUnerased th thC unerDe unerTh)) erz)
+thinCxMorEr th unerDe unerTh thC [] ez erz cxMorEr = <>
+thinCxMorEr th unerDe unerTh thC {Ga = Ga -, (_ , S)} (kee unerGa keW) (ez -, e) (erz -, e') (cxMorEr , eSe')
+  with thinSYNEr th thC unerDe unerTh eSe'
+... | h rewrite ActCo.actCo THINSUBSTSUBST th ez S
+  = thinCxMorEr th unerDe unerTh thC unerGa ez erz cxMorEr , h
+thinCxMorEr th unerDe unerTh thC (del unerGa deW) (ez -, e) erz cxMorEr
+  = thinCxMorEr th unerDe unerTh thC unerGa ez erz cxMorEr
+
+-- Weaken a cxMorEr with a kee
+cxMorErWKee : forall {m De k} unerDe {n Ga l} unerGa {ez erz}
+           -> CxMorEr {m} De {k} unerDe {n} Ga {l} unerGa ez erz
+           -> forall w S keW
+           -> CxMorEr (De -, (w , Sb.act ez S)) (kee unerDe keW) (Ga -, (w , S)) (kee unerGa keW)
+                      (Sb.actW ez) (wkEnvEr erz)
+cxMorErWKee {De = De} unerDe {Ga = Ga} unerGa {ez} {erz} cxMorEr w S keW
+  with thinCxMorEr (o' oi) unerDe (kee unerDe keW) (idThinC De) unerGa ez erz cxMorEr
+     | SYNEr.var {_}{De -, (w , Sb.act ez S)} ze <<refl
+... | h | t rewrite thinUnerasedId unerDe | ActCo.actCo THINSUBSTSUBST (o' oi) ez S = h , t
+
+-- Weaken a cxMorEr with a del
+cxMorErWDel : forall {m De k} unerDe {n Ga l} unerGa {ez erz}
+           -> CxMorEr {m} De {k} unerDe {n} Ga {l} unerGa ez erz
+           -> forall w S deW
+           -> CxMorEr (De -, (w , Sb.act ez S)) (del unerDe deW) (Ga -, (w , S)) (del unerGa deW)
+                      (Sb.actW ez) erz
+cxMorErWDel {De = De} unerDe {Ga = Ga} unerGa {ez} {erz} cxMorEr w S deW
+  with thinCxMorEr (o' oi) unerDe (del unerDe deW) (idThinC De) unerGa ez erz cxMorEr
+... | h rewrite thinUnerasedId unerDe | envIdQ (thinEr oi) thinErId erz = h
+
+idCxMorEr : forall {n}{Ga : Cx n}
+            {l}(uner : Unerased Ga l)
+         -> CxMorEr Ga uner Ga uner si siE
+idCxMorEr [] = <>
+idCxMorEr {Ga = Ga -, (w , S)} (kee uner keW)
+  with cxMorErWKee uner uner (idCxMorEr uner) w S keW
+... | h rewrite ActId.actId SUBSTID S = h
+idCxMorEr {Ga = Ga -, (w , S)} (del uner deW)
+  with cxMorErWDel uner uner (idCxMorEr uner) w S deW
+... | h rewrite ActId.actId SUBSTID S = h
+
+
+substVarEr : forall {n}{Ga : Cx n}{m}{De : Cx m}
+          -> forall{l}(unerGa : Unerased Ga l){k}(unerDe : Unerased De k)
+          -> (ez : Env (Tm m syn) n)(erz : Env (Er k) l)
+          -> CxMorEr De unerDe Ga unerGa ez erz
+          -> forall {w} keepW i (u<w : cxW Ga i << w)
+          -> SYNEr De unerDe w keepW (ez ! i)
+                   (Sb.act ez (cxTy Ga i))
+                   (erz ! eraseVar unerGa i (downsetKeep u<w keepW))
+substVarEr {Ga = Ga -, (_ , S)} (kee unerGa ke) unerDe (ez -, e) (erz -, e') (cxMorEr , eSe') keepW ze u<w
+  rewrite ActCo.actCo SUBSTTHINSUBST (ez -, e) (o' oi) S
+        | ez /oiQ
+  = subsumeSYNEr unerDe u<w keepW eSe'
+substVarEr (del unerGa de) unerDe (ez -, _) erz cxMorEr keepW ze u<w
+  = naughty (erXorKp (upsetEr u<w de) keepW)
+substVarEr {Ga = Ga -, _} (kee unerGa _) unerDe (ez -, e) (erz -, _) (cxMorEr , _) keepW (su i) u<w
+  rewrite ActCo.actCo SUBSTTHINSUBST (ez -, e) (o' oi) (cxTy Ga i)
+        | ez /oiQ
+  = substVarEr unerGa unerDe ez erz cxMorEr keepW i u<w
+substVarEr {Ga = Ga -, _} (del unerGa _) unerDe (ez -, e) erz cxMorEr keepW (su i) u<w
+  rewrite ActCo.actCo SUBSTTHINSUBST (ez -, e) (o' oi) (cxTy Ga i)
+        | ez /oiQ
+  = substVarEr unerGa unerDe ez erz cxMorEr keepW i u<w
+
+
+substCHKEr : forall {n}{Ga : Cx n}{m}{De : Cx m}
+          -> forall{l}(unerGa : Unerased Ga l){k}(unerDe : Unerased De k)
+          -> (ez : Env (Tm m syn) n) -> CxMor De Ga ez
+          -> (erz : Env (Er k) l) -> CxMorEr De unerDe Ga unerGa ez erz
+          -> forall {w keepW T t t'} -> CHKEr Ga unerGa w keepW T t t'
+          -> CHKEr De unerDe w keepW (Sb.act ez T) (Sb.act ez t) (substEr erz t')
+substSYNEr : forall {n m}{Ga : Cx n}{De : Cx m}
+          -> forall{l}(unerGa : Unerased Ga l){k}(unerDe : Unerased De k)
+          -> (ez : Env (Tm m syn) n) -> CxMor De Ga ez
+          -> (erz : Env (Er k) l) -> CxMorEr De unerDe Ga unerGa ez erz
+          -> forall {w keepW e S e'} -> SYNEr Ga unerGa w keepW e S e'
+          -> SYNEr De unerDe w keepW (Sb.act ez e) (Sb.act ez S) (substEr erz e')
+
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (pre S~>T Ttt')
+  = pre (parStab (parzRefl ez) S~>T) (substCHKEr unerGa unerDe ez cxMor erz cxMorEr Ttt')
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (star tyW) = star tyW
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (piEE {quw = quw'}{S} tyW quw deQUW deSQUW *S *TT')
+  = piEE tyW quw deQUW deSQUW
+         (substCHK ez cxMor *S)
+         (substCHKEr (del unerGa deQUW) (del unerDe deQUW)
+                     (Sb.actW ez) (CxMorW ez cxMor quw' S)
+                     erz (cxMorErWDel unerDe unerGa cxMorEr quw' S deQUW) *TT')
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (piArr {quw = quw'}{S} tyW quw deQUW keSQUW *SS' *TT')
+  = piArr tyW quw deQUW keSQUW
+          (substCHKEr unerGa unerDe ez cxMor erz cxMorEr *SS')
+          (substCHKEr (del unerGa deQUW) (del unerDe deQUW)
+                      (Sb.actW ez) (CxMorW ez cxMor quw' S)
+                      erz (cxMorErWDel unerDe unerGa cxMorEr quw' S deQUW) *TT')
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (piE {quw = quw'}{S} tyW quw keQUW deSQUW *S *TT')
+  = piE tyW quw keQUW deSQUW
+        (substCHK ez cxMor *S)
+        (substCHKEr (kee unerGa keQUW) (kee unerDe keQUW)
+                    (Sb.actW ez) (CxMorW ez cxMor quw' S)
+                    (wkEnvEr erz) (cxMorErWKee unerDe unerGa cxMorEr quw' S keQUW) *TT')
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (pi {quw = quw'}{S} tyW quw keQUW keSQUW *SS' *TT')
+  = pi tyW quw keQUW keSQUW
+       (substCHKEr unerGa unerDe ez cxMor erz cxMorEr *SS')
+       (substCHKEr (kee unerGa keQUW) (kee unerDe keQUW)
+                   (Sb.actW ez) (CxMorW ez cxMor quw' S)
+                   (wkEnvEr erz) (cxMorErWKee unerDe unerGa cxMorEr quw' S keQUW) *TT')
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (lamE {qw = qw'}{S} qw deQW Ttt')
+  = lamE qw deQW (substCHKEr (del unerGa deQW) (del unerDe deQW)
+         (Sb.actW ez) (CxMorW ez cxMor qw' S)
+         erz (cxMorErWDel unerDe unerGa cxMorEr qw' S deQW) Ttt')
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr (lam {qw = qw'}{S} qw keQW Ttt')
+  = lam qw keQW (substCHKEr (kee unerGa keQW) (kee unerDe keQW)
+        (Sb.actW ez) (CxMorW ez cxMor qw' S)
+        (wkEnvEr erz) (cxMorErWKee unerDe unerGa cxMorEr qw' S keQW) Ttt')
+substCHKEr unerGa unerDe ez cxMor erz cxMorEr ([ eSe' ] S=T)
+  = [ substSYNEr unerGa unerDe ez cxMor erz cxMorEr eSe' ] (cong (Sb.act ez) S=T)
+
+substSYNEr unerGa unerDe ez cxMor erz cxMorEr (post eSe' S~>T)
+  = post (substSYNEr unerGa unerDe ez cxMor erz cxMorEr eSe') (parStab (parzRefl ez) S~>T)
+substSYNEr unerGa unerDe ez cxMor erz cxMorEr {keepW = keepW} (var i u<w)
+  = substVarEr unerGa unerDe ez erz cxMorEr keepW i u<w
+substSYNEr unerGa unerDe ez cxMor erz cxMorEr (appE {s = s}{S}{T} fSTf' qw erQW Ss)
+  with appE (substSYNEr unerGa unerDe ez cxMor erz cxMorEr fSTf') qw erQW (substCHK ez cxMor Ss)
+... | h rewrite ActCo.actCo SUBSTSUBSTSUBST (si -, Sb.act ez (s :: S)) (Sb.actW ez) T
+              | yelp ez s S
+              | ActCo.actCo SUBSTSUBSTSUBST ez (si -, (s :: S)) T
+              | subsiQ ez
+  = h
+substSYNEr unerGa unerDe ez cxMor erz cxMorEr (_$~_^_~$_ {s = s}{S}{T} fSTf' qw keepQW Sss')
+  with substSYNEr unerGa unerDe ez cxMor erz cxMorEr fSTf'
+         $~ qw ^ keepQW ~$
+       substCHKEr unerGa unerDe ez cxMor erz cxMorEr Sss'
+... | h rewrite ActCo.actCo SUBSTSUBSTSUBST (si -, Sb.act ez (s :: S)) (Sb.actW ez) T
+              | yelp ez s S
+              | ActCo.actCo SUBSTSUBSTSUBST ez (si -, (s :: S)) T
+              | subsiQ ez
+  = h
+substSYNEr unerGa unerDe ez cxMor erz cxMorEr (*S :~: Sss')
+  = substCHK ez cxMor *S :~: substCHKEr unerGa unerDe ez cxMor erz cxMorEr Sss'
