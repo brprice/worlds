@@ -121,3 +121,18 @@ presVALID {Ga' = Ga' -, (w , S)} (rGa , refl , SS') (ext valid *S)
                       (\SS' *S -> presCHK (!~>>*refl _) [] SS' *S)
                       SS'
                       (presCHK rGa [] (parRefl _) *S))
+
+
+presCHK* : forall {n}{Ga Ga' : Cx n}{w}{T T' : Tm n chk}{t t' : Tm n chk} ->
+  Ga !~>>* Ga' -> T ~>>* T' -> t ~>>* t' ->
+  CHK Ga w T t -> CHK Ga' w T' t'
+presCHK* rGa rT [] Tt = presCHK rGa rT (parRefl _) Tt
+presCHK* rGa rT (rt ,- rts) Tt = presCHK* (!~>>*refl _) [] rts (presCHK rGa rT rt Tt)
+
+presSYN* : forall {n}{Ga Ga' : Cx n}{w}{e e' : Tm n syn}{S : Tm n chk} ->
+  Ga !~>>* Ga' -> e ~>>* e' ->
+  SYN Ga w e S -> Sg (Tm n chk) \ S' -> (S ~>>* S') * SYN Ga' w e' S'
+presSYN* rGa [] eS = presSYN rGa (parRefl _) eS
+presSYN* rGa (re ,- res) eS with presSYN rGa re eS
+... | S' , SS' , e'S' with presSYN* (!~>>*refl _) res e'S'
+... | S'' , S'S'' , e''S'' = S'' , (SS' ++ S'S'') , e''S''
